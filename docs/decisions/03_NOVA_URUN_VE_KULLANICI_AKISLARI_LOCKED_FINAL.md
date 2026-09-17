@@ -36,6 +36,8 @@ Alt bölüm:
 
 KPI ve uyarılar ilgili modülü aktif filtreyle açar.
 
+**Bekleyen Sipariş** KPI'ı `/siparisler?durum=bekliyor` hedefini açar. `durum=bekliyor` ham sipariş statüsü değil; **Yeni + Hazırlanıyor + Teslimata Hazır** durumlarını kapsayan operasyonel aggregate filtredir. **Tamamlandı** ve **İptal** kapsama girmez. Siparişler sayfasında aktif filtre kullanıcıya **Bekleyen Siparişler** adıyla açıkça gösterilir.
+
 V1 dışı:
 - Bildirim merkezi
 - Canlı trafik
@@ -50,6 +52,12 @@ V1 dışı:
 Akış:
 
 **Sipariş Listesi → Arama/Filtreleme → Sipariş Detayı → Kontrollü Durum Yönetimi**
+
+Oluşturma akışı:
+
+**Siparişler → Yeni Sipariş → Sipariş Oluştur (`/siparisler/yeni`) → Sipariş Detayı**
+
+Sipariş Oluştur V1 kapsamındadır; Siparişler sayfasındaki **Yeni Sipariş** aksiyonu aktiftir.
 
 Liste alanları:
 - Sipariş No
@@ -66,6 +74,7 @@ Arama:
 
 Filtreler:
 - Durum: Tümü / Yeni / Hazırlanıyor / Hazır / Tamamlandı / İptal
+- Operasyonel aggregate: `durum=bekliyor` → **Bekleyen Siparişler** = Yeni + Hazırlanıyor + Teslimata Hazır; Tamamlandı ve İptal hariç
 - Tarih: Bugün / Son 7 Gün / Son 30 Gün
 
 Varsayılan sıralama: **En yeni → En eski**
@@ -320,7 +329,7 @@ Veri sahipliği:
 - İşletme bilgileri → Ayarlar
 - KPI/analiz → Sistem tarafından hesaplanır
 
-V1'de siparişler demo/veri kaynağından gelen kayıtlar olarak kabul edilir. Manuel sipariş oluşturma ve gerçek mağaza entegrasyonu kapsam dışıdır.
+V1'de siparişler demo/veri kaynağından gelebilir; manuel Sipariş Oluştur akışı `/siparisler/yeni` altında desteklenir. Gerçek mağaza entegrasyonu kapsam dışıdır.
 
 ---
 

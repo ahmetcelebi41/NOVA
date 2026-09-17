@@ -49,6 +49,7 @@ Nihai rota yapısı:
 /                       Genel Bakış
 
 /siparisler             Sipariş Listesi
+/siparisler/yeni        Sipariş Oluştur
 /siparisler/[id]        Sipariş Detayı
 
 /urunler                Ürün Listesi
@@ -67,6 +68,8 @@ Nihai rota yapısı:
 
 `/` doğrudan Genel Bakış ekranıdır. Ayrı `/genel-bakis` rotası kullanılmaz.
 
+`/siparisler/yeni`, Siparişler modülünün alt sayfasıdır; sidebar'a ayrı ana navigasyon öğesi eklenmez. Teknik eşleştirmede statik `/siparisler/yeni` rotası dinamik `/siparisler/:id` rotasından ayrı tutulur; `/siparisler/[id]` Sipariş Detayı rotası korunur.
+
 URL'lerde Türkçe kelimeler kullanılabilir ancak Türkçe karakter kullanılmaz.
 
 Filtre, arama, sıralama ve gerektiğinde sayfalama URL query parametreleriyle temsil edilir.
@@ -75,6 +78,7 @@ Filtre, arama, sıralama ve gerektiğinde sayfalama URL query parametreleriyle t
 
 ```text
 /siparisler?durum=hazirlaniyor
+/siparisler?durum=bekliyor
 /stok?durum=dusuk
 /urunler?kategori=tatli
 /musteriler?q=ahmet
@@ -103,6 +107,8 @@ Temel KPI'lar:
 
 KPI ve özet alanları mümkün olduğunda ilgili modüle aktif filtreyle yönlendirir.
 
+**Bekleyen Sipariş** KPI'ı `/siparisler?durum=bekliyor` hedefini açar; filtre Siparişler listesinde kullanıcıya **Bekleyen Siparişler** olarak görünür.
+
 Ana satış grafiği varsayılan olarak son 7 günü gösterir; 7 / 30 / 90 gün seçimi desteklenebilir.
 
 Genel Bakış detaylı analiz ekranına dönüştürülmez.
@@ -112,6 +118,8 @@ Genel Bakış detaylı analiz ekranına dönüştürülmez.
 ## 04.4 — Siparişler
 
 Siparişler ana ekranı tablo/listesi olarak tasarlanır.
+
+**Yeni Sipariş** birincil aksiyonu aktiftir ve Siparişler modülünün `/siparisler/yeni` alt sayfasını açar. Sipariş Oluştur sayfası sidebar'da ayrı ana navigasyon öğesi değildir.
 
 Filtreler:
 - Arama
@@ -128,6 +136,8 @@ Hazır
 Tamamlandı
 İptal
 ```
+
+`durum=bekliyor` Siparişler liste sayfasına ait operasyonel aggregate filtredir; ham sipariş statüsü değildir. Kullanıcıya **Bekleyen Siparişler** olarak gösterilir ve **Yeni + Hazırlanıyor + Teslimata Hazır** durumlarını kapsar; **Tamamlandı** ve **İptal** durumlarını kapsamaz.
 
 Sipariş detay ekranında:
 - Sipariş özeti
@@ -330,7 +340,7 @@ Rol, ekip, abonelik, faturalandırma, vergi ve muhasebe ayarları V1 kapsamında
 
 ## 04.11 — Nihai Bilgi Mimarisi
 
-NOVA V1 toplam **11 temel rota tipinden** oluşur.
+NOVA V1 toplam **12 temel rota tipinden** oluşur.
 
 Modüller birbirine bağlanır:
 
