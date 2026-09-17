@@ -5,6 +5,7 @@ import AnalyticsPage from './pages/AnalyticsPage'
 import CustomersPage from './pages/CustomersPage'
 import InventoryPage from './pages/InventoryPage'
 import NotFoundPage from './pages/NotFoundPage'
+import OrderDetailPage from './pages/OrderDetailPage'
 import OrdersPage from './pages/OrdersPage'
 import OverviewPage from './pages/OverviewPage'
 import ProductsPage from './pages/ProductsPage'
@@ -16,6 +17,7 @@ function App() {
       <Route element={<AppShell />}>
         <Route index element={<OverviewPage />} />
         <Route path="siparisler" element={<OrdersPage />} />
+        <Route path="siparisler/:id" element={<OrderDetailPage />} />
         <Route path="urunler" element={<ProductsPage />} />
         <Route path="stok" element={<InventoryPage />} />
         <Route path="musteriler" element={<CustomersPage />} />
