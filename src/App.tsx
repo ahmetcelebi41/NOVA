@@ -1,14 +1,29 @@
+import { Route, Routes } from 'react-router-dom'
 import './App.css'
 import AppShell from './components/layout/AppShell'
+import AnalyticsPage from './pages/AnalyticsPage'
+import CustomersPage from './pages/CustomersPage'
+import InventoryPage from './pages/InventoryPage'
+import NotFoundPage from './pages/NotFoundPage'
+import OrdersPage from './pages/OrdersPage'
+import OverviewPage from './pages/OverviewPage'
+import ProductsPage from './pages/ProductsPage'
+import SettingsPage from './pages/SettingsPage'
 
 function App() {
   return (
-    <AppShell>
-      <section className="app-placeholder" aria-labelledby="page-title">
-        <h1 id="page-title">Genel Bakış</h1>
-        <p>Yönetim paneli geliştirme ortamı hazır.</p>
-      </section>
-    </AppShell>
+    <Routes>
+      <Route element={<AppShell />}>
+        <Route index element={<OverviewPage />} />
+        <Route path="siparisler" element={<OrdersPage />} />
+        <Route path="urunler" element={<ProductsPage />} />
+        <Route path="stok" element={<InventoryPage />} />
+        <Route path="musteriler" element={<CustomersPage />} />
+        <Route path="analizler" element={<AnalyticsPage />} />
+        <Route path="ayarlar" element={<SettingsPage />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+    </Routes>
   )
 }
 

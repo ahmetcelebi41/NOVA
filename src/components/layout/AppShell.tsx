@@ -1,19 +1,16 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Outlet } from 'react-router-dom'
 import Header from './Header'
 import Sidebar from './Sidebar'
 import './AppShell.css'
 
 const desktopMediaQuery = '(min-width: 1024px)'
 
-type AppShellProps = {
-  children: ReactNode
-}
-
 function getIsDesktop() {
   return typeof window !== 'undefined' && window.matchMedia(desktopMediaQuery).matches
 }
 
-function AppShell({ children }: AppShellProps) {
+function AppShell() {
   const [isDesktop, setIsDesktop] = useState(getIsDesktop)
   const [isNavigationOpen, setIsNavigationOpen] = useState(false)
   const menuButtonRef = useRef<HTMLButtonElement>(null)
@@ -82,10 +79,10 @@ function AppShell({ children }: AppShellProps) {
   return (
     <div className="app-shell">
       <Sidebar
-        currentPath={window.location.pathname}
         isDrawerOpen={isDrawerOpen}
         isVisible={isSidebarVisible}
         onClose={closeNavigation}
+        onNavigate={isDrawerOpen ? closeNavigation : undefined}
         sidebarRef={sidebarRef}
       />
 
@@ -112,7 +109,9 @@ function AppShell({ children }: AppShellProps) {
         />
 
         <main className="app-shell__main" id="main-content">
-          <div className="app-shell__content">{children}</div>
+          <div className="app-shell__content">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

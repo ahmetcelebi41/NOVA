@@ -1,10 +1,11 @@
 import type { RefObject } from 'react'
+import { Link, NavLink } from 'react-router-dom'
 
 type SidebarProps = {
-  currentPath: string
   isDrawerOpen: boolean
   isVisible: boolean
   onClose: () => void
+  onNavigate?: () => void
   sidebarRef: RefObject<HTMLElement | null>
 }
 
@@ -117,34 +118,25 @@ function CloseIcon() {
   )
 }
 
-function isActivePath(currentPath: string, href: string) {
-  if (href === '/') {
-    return currentPath === href
-  }
-
-  return currentPath === href || currentPath.startsWith(`${href}/`)
-}
-
-function NavigationLink({ currentPath, item }: { currentPath: string; item: NavigationItem }) {
-  const isActive = isActivePath(currentPath, item.href)
-
+function NavigationLink({ item, onNavigate }: { item: NavigationItem; onNavigate?: () => void }) {
   return (
-    <a
-      aria-current={isActive ? 'page' : undefined}
+    <NavLink
       className="app-sidebar__link"
-      href={item.href}
+      end={item.href === '/'}
+      onClick={onNavigate}
+      to={item.href}
     >
       <NavigationIcon name={item.icon} />
       <span>{item.label}</span>
-    </a>
+    </NavLink>
   )
 }
 
 function Sidebar({
-  currentPath,
   isDrawerOpen,
   isVisible,
   onClose,
+  onNavigate,
   sidebarRef,
 }: SidebarProps) {
   return (
@@ -160,9 +152,9 @@ function Sidebar({
       role={isDrawerOpen ? 'dialog' : undefined}
     >
       <div className="app-sidebar__brand-row">
-        <a className="app-sidebar__brand" href="/">
+        <Link className="app-sidebar__brand" onClick={onNavigate} to="/">
           NOVA
-        </a>
+        </Link>
 
         <button
           aria-label="Ana navigasyon menüsünü kapat"
@@ -176,12 +168,12 @@ function Sidebar({
 
       <nav aria-label="Ana navigasyon" className="app-sidebar__navigation">
         {primaryNavigation.map((item) => (
-          <NavigationLink currentPath={currentPath} item={item} key={item.href} />
+          <NavigationLink item={item} key={item.href} onNavigate={onNavigate} />
         ))}
       </nav>
 
       <div className="app-sidebar__footer">
-        <NavigationLink currentPath={currentPath} item={settingsNavigation} />
+        <NavigationLink item={settingsNavigation} onNavigate={onNavigate} />
       </div>
     </aside>
   )
