@@ -1,16 +1,8 @@
-.app {
-  display: grid;
-  min-height: 100vh;
-  place-content: center;
-  padding: var(--layout-content-padding);
-  text-align: center;
-}
-
-.app h1 {
+.app-placeholder h1 {
   margin: 0;
   font-size: var(--text-28);
 }
 
-.app p {
+.app-placeholder p {
   margin: var(--space-12) 0 0;
 }

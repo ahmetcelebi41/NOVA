@@ -1,11 +1,14 @@
 import './App.css'
+import AppShell from './components/layout/AppShell'
 
 function App() {
   return (
-    <main className="app">
-      <h1>NOVA</h1>
-      <p>Yönetim paneli geliştirme ortamı hazır.</p>
-    </main>
+    <AppShell>
+      <section className="app-placeholder" aria-labelledby="page-title">
+        <h1 id="page-title">Genel Bakış</h1>
+        <p>Yönetim paneli geliştirme ortamı hazır.</p>
+      </section>
+    </AppShell>
   )
 }
 
