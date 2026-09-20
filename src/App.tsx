@@ -9,6 +9,7 @@ import OrderCreatePage from './pages/OrderCreatePage'
 import OrderDetailPage from './pages/OrderDetailPage'
 import OrdersPage from './pages/OrdersPage'
 import OverviewPage from './pages/OverviewPage'
+import ProductEditorPage from './pages/ProductEditorPage'
 import ProductsPage from './pages/ProductsPage'
 import SettingsPage from './pages/SettingsPage'
 
@@ -21,6 +22,8 @@ function App() {
         <Route path="siparisler/yeni" element={<OrderCreatePage />} />
         <Route path="siparisler/:id" element={<OrderDetailPage />} />
         <Route path="urunler" element={<ProductsPage />} />
+        <Route path="urunler/yeni" element={<ProductEditorPage mode="create" />} />
+        <Route path="urunler/:id" element={<ProductEditorPage mode="edit" />} />
         <Route path="stok" element={<InventoryPage />} />
         <Route path="musteriler" element={<CustomersPage />} />
         <Route path="analizler" element={<AnalyticsPage />} />
