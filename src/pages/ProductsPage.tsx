@@ -396,7 +396,10 @@ function ProductsPage() {
           <h1 id="page-title">Ürünler</h1>
           <p>Ürünleri bulun, filtreleyin ve düzenleme ekranına ulaşın.</p>
         </div>
-        <Link className="products-page__primary-action" to="/urunler/yeni">
+        <Link
+          className="products-page__primary-action"
+          to={`/urunler/yeni${preservedQuery ? `?${preservedQuery}` : ''}`}
+        >
           Yeni Ürün
         </Link>
       </header>

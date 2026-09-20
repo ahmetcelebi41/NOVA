@@ -4,7 +4,9 @@ export type ProductStockStatus = 'Normal' | 'Düşük Stok' | 'Tükendi'
 export type ProductDemoRecord = {
   category: string
   createdAt: string
+  description?: string
   id: string
+  lowStockThreshold: number
   name: string
   price: number
   publication: ProductPublication
@@ -65,6 +67,7 @@ export const productDemoData: ProductDemoRecord[] = productCatalog.map((product,
     ...product,
     createdAt: new Date(referenceTimestamp - index * 24 * 60 * 60 * 1000).toISOString(),
     id: String(3101 + index),
+    lowStockThreshold: 6,
     publication: index % 5 === 4 ? 'Pasif' : 'Aktif',
     sku: `NVA-${String(index + 1).padStart(4, '0')}`,
     stock:
