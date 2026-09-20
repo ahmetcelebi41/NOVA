@@ -1,20 +1,13 @@
 import { useEffect, useMemo, useRef, type KeyboardEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import './OrdersPage.css'
-
-type OrderStatus = 'Yeni' | 'Hazırlanıyor' | 'Teslimata Hazır' | 'Tamamlandı' | 'İptal'
-
-type Order = {
-  amount: number
-  customer: string
-  date: string
-  email: string
-  id: string
-  number: string
-  phone: string
-  product: string
-  status: OrderStatus
-}
+import {
+  orderDemoData,
+  orderReferenceTimestamp,
+  orderTodayStartTimestamp,
+  type OrderDemoRecord,
+  type OrderStatus,
+} from './orders/orderDemoData'
 
 type FilterControlsProps = {
   containerId?: string
@@ -55,60 +48,6 @@ const dateOptions = [
 const dateFilterLabels = new Map(dateOptions.map((option) => [option.value, option.label]))
 const statusFilterLabels = new Map(statusOptions.map((option) => [option.value, option.label]))
 statusFilterLabels.set('bekliyor', 'Bekleyen Siparişler')
-
-const customers = [
-  'Elif Kaya',
-  'Mert Demir',
-  'Zeynep Şahin',
-  'Can Aydın',
-  'Selin Arslan',
-  'Burak Yılmaz',
-  'Derya Koç',
-  'Emre Çetin',
-]
-
-const products = [
-  'Antep Fıstıklı Baklava',
-  'Frambuazlı Cheesecake',
-  'Çikolatalı Makaron',
-  'San Sebastian',
-  'Limonlu Tart',
-  'Çilekli Pasta',
-]
-
-const statuses: OrderStatus[] = [
-  'Yeni',
-  'Hazırlanıyor',
-  'Teslimata Hazır',
-  'Tamamlandı',
-  'İptal',
-  'Tamamlandı',
-]
-
-const dateOffsetsInHours = [
-  1, 3, 6, 12, 20, 28, 40, 55, 72, 96, 120, 144, 168, 192, 240, 288, 336, 384,
-  456, 528, 624, 744,
-]
-
-const referenceTimestamp = new Date('2026-09-17T16:00:00+03:00').getTime()
-const todayStartTimestamp = new Date('2026-09-17T00:00:00+03:00').getTime()
-
-const orders: Order[] = dateOffsetsInHours.map((hours, index) => {
-  const customer = customers[index % customers.length]
-  const customerSlug = customer.toLocaleLowerCase('tr-TR').replaceAll(' ', '.')
-
-  return {
-    amount: 520 + ((index * 385) % 2480),
-    customer,
-    date: new Date(referenceTimestamp - hours * 60 * 60 * 1000).toISOString(),
-    email: `${customerSlug}.${index + 1}@ornek.com`,
-    id: String(2048 - index),
-    number: `#${2048 - index}`,
-    phone: `05${30 + (index % 5)} ${120 + index} ${40 + (index % 50)} ${60 + (index % 30)}`,
-    product: products[index % products.length],
-    status: statuses[index % statuses.length],
-  }
-})
 
 const numberFormatter = new Intl.NumberFormat('tr-TR')
 
@@ -176,7 +115,13 @@ function createOrderDetailPath(orderId: string, preservedQuery: string) {
   return `/siparisler/${orderId}${preservedQuery ? `?${preservedQuery}` : ''}`
 }
 
-function OrderCards({ orderItems, preservedQuery }: { orderItems: Order[]; preservedQuery: string }) {
+function OrderCards({
+  orderItems,
+  preservedQuery,
+}: {
+  orderItems: OrderDemoRecord[]
+  preservedQuery: string
+}) {
   return (
     <ul className="orders-cards">
       {orderItems.map((order) => (
@@ -210,7 +155,13 @@ function OrderCards({ orderItems, preservedQuery }: { orderItems: Order[]; prese
   )
 }
 
-function OrdersTable({ orderItems, preservedQuery }: { orderItems: Order[]; preservedQuery: string }) {
+function OrdersTable({
+  orderItems,
+  preservedQuery,
+}: {
+  orderItems: OrderDemoRecord[]
+  preservedQuery: string
+}) {
   return (
     <table className="orders-table">
       <thead>
@@ -286,14 +237,14 @@ function OrdersPage() {
     const normalizedQuery = query.trim().toLocaleLowerCase('tr-TR')
     const dateThreshold =
       selectedDate === 'bugun'
-        ? todayStartTimestamp
+        ? orderTodayStartTimestamp
         : selectedDate === '7gun'
-          ? referenceTimestamp - 7 * 24 * 60 * 60 * 1000
+          ? orderReferenceTimestamp - 7 * 24 * 60 * 60 * 1000
           : selectedDate === '30gun'
-            ? referenceTimestamp - 30 * 24 * 60 * 60 * 1000
+            ? orderReferenceTimestamp - 30 * 24 * 60 * 60 * 1000
             : null
 
-    return orders
+    return orderDemoData
       .filter((order) => {
         const matchingStatuses = statusesByQuery.get(selectedStatus)
         if (matchingStatuses && !matchingStatuses.includes(order.status)) {
