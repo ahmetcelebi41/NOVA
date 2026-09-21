@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
+import { orderDemoData, type OrderStatus } from './orders/orderDemoData'
 import SalesChart from './overview/SalesChart'
+import { productDemoData } from './products/productDemoData'
 import './OverviewPage.css'
 
 type Kpi = {
@@ -7,19 +9,6 @@ type Kpi = {
   label: string
   meta: string
   value: string
-}
-
-type OrderStatus = 'Yeni' | 'Hazırlanıyor' | 'Teslimata Hazır' | 'Tamamlandı'
-
-type InventoryStatus = 'Düşük Stok' | 'Tükendi'
-
-type RecentOrder = {
-  amount: number
-  customer: string
-  date: string
-  id: string
-  number: string
-  status: OrderStatus
 }
 
 const numberFormatter = new Intl.NumberFormat('tr-TR')
@@ -56,7 +45,9 @@ const kpis: Kpi[] = [
     href: '/stok?durum=dusuk',
     label: 'Düşük Stoklu Ürün',
     meta: 'Kontrol gerektiren ürünler',
-    value: '4',
+    value: String(
+      productDemoData.filter((product) => product.stockStatus === 'Düşük Stok').length,
+    ),
   },
 ]
 
@@ -67,60 +58,16 @@ const orderStatuses: Array<{ count: number; label: OrderStatus }> = [
   { count: 18, label: 'Tamamlandı' },
 ]
 
-const criticalInventory: Array<{
-  name: string
-  quantity: number
-  status: InventoryStatus
-}> = [
-  { name: 'Antep Fıstıklı Baklava', quantity: 2, status: 'Düşük Stok' },
-  { name: 'Frambuazlı Cheesecake', quantity: 0, status: 'Tükendi' },
-  { name: 'Çikolatalı Makaron', quantity: 3, status: 'Düşük Stok' },
-  { name: 'San Sebastian', quantity: 1, status: 'Düşük Stok' },
-  { name: 'Limonlu Tart', quantity: 0, status: 'Tükendi' },
-]
+const criticalInventory = productDemoData
+  .filter((product) => product.stockStatus !== 'Normal')
+  .slice(0, 5)
+  .map((product) => ({
+    name: product.name,
+    quantity: product.stock,
+    status: product.stockStatus,
+  }))
 
-const recentOrders: RecentOrder[] = [
-  {
-    amount: 1280,
-    customer: 'Elif Kaya',
-    date: '2026-09-17T12:40:00+03:00',
-    id: '1048',
-    number: '#1048',
-    status: 'Yeni',
-  },
-  {
-    amount: 860,
-    customer: 'Mert Demir',
-    date: '2026-09-17T11:15:00+03:00',
-    id: '1047',
-    number: '#1047',
-    status: 'Hazırlanıyor',
-  },
-  {
-    amount: 2140,
-    customer: 'Zeynep Şahin',
-    date: '2026-09-17T10:05:00+03:00',
-    id: '1046',
-    number: '#1046',
-    status: 'Teslimata Hazır',
-  },
-  {
-    amount: 625,
-    customer: 'Can Aydın',
-    date: '2026-09-17T09:20:00+03:00',
-    id: '1045',
-    number: '#1045',
-    status: 'Tamamlandı',
-  },
-  {
-    amount: 1535,
-    customer: 'Selin Arslan',
-    date: '2026-09-16T18:35:00+03:00',
-    id: '1044',
-    number: '#1044',
-    status: 'Tamamlandı',
-  },
-]
+const recentOrders = orderDemoData.slice(0, 5)
 
 function KpiCard({ href, label, meta, value }: Kpi) {
   const content = (

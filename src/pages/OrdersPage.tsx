@@ -212,8 +212,10 @@ function OrdersPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const mobileFiltersRef = useRef<HTMLDetailsElement>(null)
   const mobileFiltersSummaryRef = useRef<HTMLElement>(null)
-  const selectedStatus = searchParams.get('durum') ?? ''
-  const selectedDate = searchParams.get('tarih') ?? ''
+  const requestedStatus = searchParams.get('durum') ?? ''
+  const requestedDate = searchParams.get('tarih') ?? ''
+  const selectedStatus = statusesByQuery.has(requestedStatus) ? requestedStatus : ''
+  const selectedDate = dateFilterLabels.has(requestedDate) ? requestedDate : ''
   const query = searchParams.get('q') ?? ''
 
   const updateSearchParams = (
@@ -279,21 +281,35 @@ function OrdersPage() {
   const preservedQuery = searchParams.toString()
 
   useEffect(() => {
+    const nextParams = new URLSearchParams(searchParams)
+    let shouldNormalize = false
+
+    if (requestedStatus && !statusesByQuery.has(requestedStatus)) {
+      nextParams.delete('durum')
+      shouldNormalize = true
+    }
+
+    if (requestedDate && !dateFilterLabels.has(requestedDate)) {
+      nextParams.delete('tarih')
+      shouldNormalize = true
+    }
+
     const currentPageParam = searchParams.get('sayfa')
     const normalizedPageParam = currentPage === 1 ? null : String(currentPage)
 
-    if (currentPageParam === normalizedPageParam) {
-      return
+    if (currentPageParam !== normalizedPageParam) {
+      if (normalizedPageParam) {
+        nextParams.set('sayfa', normalizedPageParam)
+      } else {
+        nextParams.delete('sayfa')
+      }
+      shouldNormalize = true
     }
 
-    const nextParams = new URLSearchParams(searchParams)
-    if (normalizedPageParam) {
-      nextParams.set('sayfa', normalizedPageParam)
-    } else {
-      nextParams.delete('sayfa')
+    if (shouldNormalize) {
+      setSearchParams(nextParams, { replace: true })
     }
-    setSearchParams(nextParams, { replace: true })
-  }, [currentPage, searchParams, setSearchParams])
+  }, [currentPage, requestedDate, requestedStatus, searchParams, setSearchParams])
 
   const setFilter = (key: 'durum' | 'tarih', value: string) => {
     updateSearchParams({ [key]: value || null, sayfa: null })
