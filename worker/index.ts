@@ -1,5 +1,5 @@
 import type { HealthResponse } from '../src/contracts/index.js'
-import { listProducts } from './products.js'
+import { listProducts, parseProductsQuery } from './products.js'
 
 type Env = {
   DB: D1Database
@@ -31,8 +31,22 @@ export default {
     }
 
     if (request.method === 'GET' && url.pathname === '/api/products') {
+      const parsedQuery = parseProductsQuery(url.searchParams)
+
+      if (!parsedQuery.ok) {
+        return jsonResponse(
+          {
+            error: {
+              code: 'INVALID_QUERY',
+              message: 'Geçersiz ürün filtreleri.',
+            },
+          },
+          400,
+        )
+      }
+
       try {
-        return jsonResponse(await listProducts(env.DB))
+        return jsonResponse(await listProducts(env.DB, parsedQuery.query))
       } catch {
         return jsonResponse(
           {
