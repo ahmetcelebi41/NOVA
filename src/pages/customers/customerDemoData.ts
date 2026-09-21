@@ -1,17 +1,37 @@
 export type CustomerStatus = 'Yeni' | 'Tekrar' | 'Pasif'
 
+export type CustomerOrderStatus =
+  | 'Yeni'
+  | 'Hazırlanıyor'
+  | 'Teslimata Hazır'
+  | 'Tamamlandı'
+  | 'İptal'
+
+export type CustomerOrderSummary = {
+  amountInKurus: number
+  date: string
+  id: string
+  number: string
+  product: string
+  status: CustomerOrderStatus
+}
+
 export type CustomerDemoRecord = {
+  completedOrderCount: number
   email: string
   id: string
   lastOrderDate: string
   name: string
   orderCount: number
   phone: string
+  recentOrders: CustomerOrderSummary[]
   status: CustomerStatus
   totalSpentInKurus: number
 }
 
-export const customerDemoData: CustomerDemoRecord[] = [
+type CustomerBaseRecord = Omit<CustomerDemoRecord, 'completedOrderCount' | 'recentOrders'>
+
+const customerBaseData: CustomerBaseRecord[] = [
   {
     email: 'ayse.kaya@example.com',
     id: '4101',
@@ -233,3 +253,88 @@ export const customerDemoData: CustomerDemoRecord[] = [
     totalSpentInKurus: 70400,
   },
 ]
+
+const completedOrderCounts: Record<string, number> = {
+  '4101': 1,
+  '4102': 3,
+  '4103': 3,
+  '4104': 1,
+  '4105': 3,
+  '4106': 2,
+  '4107': 2,
+  '4108': 1,
+  '4109': 6,
+  '4110': 5,
+  '4111': 2,
+  '4112': 1,
+  '4113': 5,
+  '4114': 3,
+  '4115': 4,
+  '4116': 1,
+  '4117': 8,
+  '4118': 2,
+  '4119': 5,
+  '4120': 1,
+  '4121': 5,
+  '4122': 2,
+}
+
+const recentOrderProducts = [
+  'Antep Fıstıklı Baklava',
+  'Frambuazlı Cheesecake',
+  'Çikolatalı Makaron',
+  'San Sebastian',
+  'Limonlu Tart',
+]
+
+const pendingOrderStatuses: CustomerOrderStatus[] = [
+  'Yeni',
+  'Hazırlanıyor',
+  'Teslimata Hazır',
+]
+
+function createRecentOrders(
+  customer: CustomerBaseRecord,
+  customerIndex: number,
+  completedOrderCount: number,
+): CustomerOrderSummary[] {
+  const visibleOrderCount = Math.min(customer.orderCount, 10)
+  const visibleCompletedCount = Math.min(completedOrderCount, visibleOrderCount)
+  const visiblePendingCount = visibleOrderCount - visibleCompletedCount
+  const completedOrderAmount = customer.totalSpentInKurus / completedOrderCount
+
+  return Array.from({ length: visibleOrderCount }, (_, orderIndex) => {
+    const isCompleted = orderIndex >= visiblePendingCount
+    const id = String(510000 + customerIndex * 100 + orderIndex + 1)
+    const date = new Date(
+      Date.parse(`${customer.lastOrderDate}T00:00:00Z`) - orderIndex * 7 * 24 * 60 * 60 * 1000,
+    )
+      .toISOString()
+      .slice(0, 10)
+
+    return {
+      amountInKurus: isCompleted
+        ? completedOrderAmount
+        : completedOrderAmount + (orderIndex + 1) * 2500,
+      date,
+      id,
+      number: `#${id}`,
+      product: recentOrderProducts[(customerIndex + orderIndex) % recentOrderProducts.length],
+      status: isCompleted
+        ? 'Tamamlandı'
+        : pendingOrderStatuses[orderIndex % pendingOrderStatuses.length],
+    }
+  })
+}
+
+export const customerDemoData: CustomerDemoRecord[] = customerBaseData.map(
+  (customer, customerIndex) => {
+    const completedOrderCount = completedOrderCounts[customer.id]
+
+    return {
+      ...customer,
+      completedOrderCount,
+      recentOrders: createRecentOrders(customer, customerIndex, completedOrderCount),
+    }
+  },
+)

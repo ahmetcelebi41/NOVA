@@ -1,0 +1,318 @@
+.customer-detail-page {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-24);
+}
+
+.customer-detail-page__back {
+  width: fit-content;
+  font-size: var(--text-14);
+  font-weight: var(--font-weight-semibold);
+}
+
+.customer-detail-page__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-16);
+}
+
+.customer-detail-page__header h1,
+.customer-detail-page__header p,
+.customer-detail-section h2,
+.customer-detail-section p,
+.customer-detail-not-found h1,
+.customer-detail-not-found p {
+  margin: 0;
+}
+
+.customer-detail-page__header h1,
+.customer-detail-not-found h1 {
+  font-size: var(--text-28);
+}
+
+.customer-detail-page__header p,
+.customer-detail-not-found p {
+  margin-top: var(--space-8);
+  font-size: var(--text-14);
+  opacity: 0.68;
+}
+
+.customer-detail-page__header > span,
+.customer-order-status {
+  font-weight: var(--font-weight-semibold);
+}
+
+.customer-detail-page__header > span {
+  padding: var(--space-8) var(--space-12);
+  border: 1px solid currentColor;
+  border-radius: var(--radius-pill);
+  color: var(--color-primary);
+  font-size: var(--text-13);
+}
+
+.customer-detail-section {
+  position: relative;
+  min-width: 0;
+  padding: var(--space-16);
+  border-radius: var(--radius-12);
+  background: var(--color-surface);
+}
+
+.customer-detail-section::before,
+.customer-metrics > div::before,
+.customer-order-card::before {
+  position: absolute;
+  border: 1px solid currentColor;
+  border-radius: inherit;
+  content: '';
+  inset: 0;
+  opacity: 0.14;
+  pointer-events: none;
+}
+
+.customer-detail-section h2 {
+  margin-bottom: var(--space-16);
+  font-size: var(--text-20);
+}
+
+.customer-metrics {
+  display: grid;
+  margin: 0;
+  gap: var(--space-16);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.customer-metrics > div {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  padding: var(--space-16);
+  border-radius: var(--radius-8);
+  gap: var(--space-8);
+}
+
+.customer-metrics dt,
+.customer-contact span,
+.customer-order-card dt {
+  font-size: var(--text-12);
+  font-weight: var(--font-weight-medium);
+  opacity: 0.62;
+}
+
+.customer-metrics dd,
+.customer-order-card dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.customer-metrics dd {
+  font-size: var(--text-20);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.customer-contact {
+  display: grid;
+  font-style: normal;
+  gap: var(--space-16);
+}
+
+.customer-contact > div {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-4);
+}
+
+.customer-contact strong {
+  overflow-wrap: anywhere;
+  font-size: var(--text-14);
+  font-weight: var(--font-weight-medium);
+}
+
+.customer-orders-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-16);
+}
+
+.customer-orders-header h2 {
+  margin-bottom: 0;
+}
+
+.customer-orders-header p {
+  margin-top: var(--space-4);
+  font-size: var(--text-13);
+  opacity: 0.68;
+}
+
+.customer-orders-header > a {
+  min-height: var(--space-40);
+  display: inline-flex;
+  align-items: center;
+  font-weight: var(--font-weight-semibold);
+}
+
+.customer-orders-list {
+  min-width: 0;
+  margin-top: var(--space-16);
+}
+
+.customer-orders-table {
+  display: none;
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.customer-orders-table th,
+.customer-orders-table td {
+  padding: var(--space-12) var(--space-8);
+  overflow-wrap: anywhere;
+  text-align: start;
+  vertical-align: middle;
+}
+
+.customer-orders-table th {
+  font-weight: var(--font-weight-semibold);
+}
+
+.customer-orders-table tbody td {
+  position: relative;
+}
+
+.customer-orders-table tbody td::before {
+  position: absolute;
+  border-block-start: 1px solid currentColor;
+  content: '';
+  inset-block-start: 0;
+  inset-inline: 0;
+  opacity: 0.12;
+  pointer-events: none;
+}
+
+.customer-orders-table th.customer-orders-table__number,
+.customer-orders-table td.customer-orders-table__number {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.customer-order-cards {
+  display: grid;
+  padding: 0;
+  margin: 0;
+  gap: var(--space-16);
+  list-style: none;
+}
+
+.customer-order-card {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  padding: var(--space-16);
+  border-radius: var(--radius-8);
+  gap: var(--space-16);
+}
+
+.customer-order-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.customer-order-card header a {
+  position: relative;
+  font-weight: var(--font-weight-semibold);
+}
+
+.customer-order-card dl {
+  display: grid;
+  margin: 0;
+  gap: var(--space-16);
+}
+
+.customer-order-card dl > div {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-4);
+}
+
+.customer-order-card dd {
+  font-variant-numeric: tabular-nums;
+}
+
+.customer-detail-not-found {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-16);
+}
+
+.customer-detail-not-found p {
+  margin-top: 0;
+}
+
+.customer-detail-not-found a {
+  font-weight: var(--font-weight-semibold);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .customer-detail-page__back:hover,
+  .customer-orders-header > a:hover,
+  .customer-orders-table a:hover,
+  .customer-order-card header a:hover,
+  .customer-detail-not-found a:hover {
+    text-decoration-thickness: 2px;
+  }
+}
+
+@media (min-width: 768px) {
+  .customer-detail-section {
+    padding: var(--space-24);
+  }
+
+  .customer-contact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .customer-order-card dl {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .customer-metrics {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .customer-order-cards {
+    display: none;
+  }
+
+  .customer-orders-table {
+    display: table;
+  }
+
+  .customer-orders-table th:nth-child(1),
+  .customer-orders-table td:nth-child(1),
+  .customer-orders-table th:nth-child(2),
+  .customer-orders-table td:nth-child(2),
+  .customer-orders-table th:nth-child(5),
+  .customer-orders-table td:nth-child(5) {
+    width: 16%;
+  }
+
+  .customer-orders-table th:nth-child(3),
+  .customer-orders-table td:nth-child(3) {
+    width: 32%;
+  }
+
+  .customer-orders-table th:nth-child(4),
+  .customer-orders-table td:nth-child(4) {
+    width: 20%;
+  }
+}
