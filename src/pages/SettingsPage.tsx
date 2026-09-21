@@ -11,17 +11,7 @@ import {
   settingsFormSchema,
   type SettingsFormValues,
 } from './settings/settingsFormSchema'
-
-const settingsDemoValues: SettingsFormValues = {
-  address: 'Merkez Mahallesi, İstanbul',
-  businessName: 'NOVA Pastanesi',
-  deliveryEnabled: true,
-  deliveryFee: '60',
-  email: 'iletisim@novapastanesi.com',
-  minimumOrderAmount: '300',
-  phone: '0212 555 01 10',
-  pickupEnabled: true,
-}
+import { settingsDemoValues } from './settings/settingsDemoData'
 
 type FieldMessageProps = {
   error?: FieldError
