@@ -24,6 +24,25 @@ export type ProductListItem = {
   imageUrl: string | null
 }
 
+export type ProductDetail = {
+  id: number
+  name: string
+  sku: string | null
+  category: string
+  description: string | null
+  priceMinor: number
+  stockQuantity: number
+  lowStockThreshold: number
+  publicationStatus: ProductPublicationStatus
+  imageUrl: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type ProductDetailResponse = {
+  item: ProductDetail
+}
+
 export type ProductsResponse = {
   items: ProductListItem[]
   page: number

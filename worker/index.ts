@@ -1,5 +1,10 @@
 import type { HealthResponse } from '../src/contracts/index.js'
-import { listProducts, parseProductsQuery } from './products.js'
+import {
+  getProduct,
+  listProducts,
+  parseProductId,
+  parseProductsQuery,
+} from './products.js'
 
 type Env = {
   DB: D1Database
@@ -47,6 +52,60 @@ export default {
 
       try {
         return jsonResponse(await listProducts(env.DB, parsedQuery.query))
+      } catch {
+        return jsonResponse(
+          {
+            ok: false,
+            error: 'Internal Server Error',
+          },
+          500,
+        )
+      }
+    }
+
+    if (request.method === 'GET' && url.pathname.startsWith('/api/products/')) {
+      const rawProductId = url.pathname.slice('/api/products/'.length)
+
+      if (rawProductId.includes('/')) {
+        return jsonResponse(
+          {
+            ok: false,
+            error: 'Not Found',
+          },
+          404,
+        )
+      }
+
+      const productId = parseProductId(rawProductId)
+
+      if (productId === null) {
+        return jsonResponse(
+          {
+            error: {
+              code: 'INVALID_PRODUCT_ID',
+              message: 'Geçersiz ürün kimliği.',
+            },
+          },
+          400,
+        )
+      }
+
+      try {
+        const response = await getProduct(env.DB, productId)
+
+        if (!response) {
+          return jsonResponse(
+            {
+              error: {
+                code: 'PRODUCT_NOT_FOUND',
+                message: 'Ürün bulunamadı.',
+              },
+            },
+            404,
+          )
+        }
+
+        return jsonResponse(response)
       } catch {
         return jsonResponse(
           {

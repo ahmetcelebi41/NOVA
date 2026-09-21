@@ -1,4 +1,6 @@
 import type {
+  ProductDetail,
+  ProductDetailResponse,
   ProductListItem,
   ProductPublicationStatus,
   ProductsQuery,
@@ -6,6 +8,21 @@ import type {
   ProductStatusFilter,
   ProductStockStatus,
 } from '../src/contracts/index.js'
+
+type ProductDetailRow = {
+  id: number
+  name: string
+  sku: string | null
+  category: string
+  description: string | null
+  price_in_kurus: number
+  stock_quantity: number
+  low_stock_threshold: number
+  publication_status: string
+  image_url: string | null
+  created_at: string
+  updated_at: string
+}
 
 type ProductRow = {
   id: number
@@ -186,6 +203,62 @@ function mapProduct(row: ProductRow): ProductListItem {
     stockStatus: mapStockStatus(row.stock_status),
     imageUrl: row.image_url,
   }
+}
+
+function mapProductDetail(row: ProductDetailRow): ProductDetail {
+  return {
+    id: row.id,
+    name: row.name,
+    sku: row.sku,
+    category: row.category,
+    description: row.description,
+    priceMinor: row.price_in_kurus,
+    stockQuantity: row.stock_quantity,
+    lowStockThreshold: row.low_stock_threshold,
+    publicationStatus: mapPublicationStatus(row.publication_status),
+    imageUrl: row.image_url,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+export function parseProductId(value: string): number | null {
+  if (!/^\d+$/.test(value)) {
+    return null
+  }
+
+  const productId = Number(value)
+
+  return Number.isSafeInteger(productId) && productId > 0 ? productId : null
+}
+
+export async function getProduct(
+  database: D1Database,
+  productId: number,
+): Promise<ProductDetailResponse | null> {
+  const row = await database
+    .prepare(`
+      SELECT
+        id,
+        name,
+        sku,
+        category,
+        description,
+        price_in_kurus,
+        stock_quantity,
+        low_stock_threshold,
+        publication_status,
+        image_url,
+        created_at,
+        updated_at
+      FROM products
+      WHERE id = ?
+      LIMIT 1
+    `)
+    .bind(productId)
+    .first<ProductDetailRow>()
+
+  return row ? { item: mapProductDetail(row) } : null
 }
 
 export async function listProducts(
