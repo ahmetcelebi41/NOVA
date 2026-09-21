@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom'
 import './App.css'
 import AppShell from './components/layout/AppShell'
 import AnalyticsPage from './pages/AnalyticsPage'
+import CustomerDetailPage from './pages/CustomerDetailPage'
 import CustomersPage from './pages/CustomersPage'
 import NotFoundPage from './pages/NotFoundPage'
 import OrderCreatePage from './pages/OrderCreatePage'
@@ -26,6 +27,7 @@ function App() {
         <Route path="urunler/:id" element={<ProductEditorPage mode="edit" />} />
         <Route path="stok" element={<StockPage />} />
         <Route path="musteriler" element={<CustomersPage />} />
+        <Route path="musteriler/:id" element={<CustomerDetailPage />} />
         <Route path="analizler" element={<AnalyticsPage />} />
         <Route path="ayarlar" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
