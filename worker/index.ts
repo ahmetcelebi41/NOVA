@@ -5,6 +5,7 @@ import {
   parseCustomerId,
   parseCustomersQuery,
 } from './customers.js'
+import { getOrder, listOrders, parseOrderId, parseOrdersQuery } from './orders.js'
 import {
   createProduct,
   getProduct,
@@ -155,6 +156,68 @@ export default {
 
       try {
         return jsonResponse(await listCustomers(env.DB, parsedQuery.query))
+      } catch {
+        return internalErrorResponse()
+      }
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/orders') {
+      const parsedQuery = parseOrdersQuery(url.searchParams)
+
+      if (!parsedQuery.ok) {
+        return jsonResponse(
+          {
+            error: {
+              code: 'INVALID_ORDER_QUERY',
+              message: 'Geçersiz sipariş filtreleri.',
+            },
+          },
+          400,
+        )
+      }
+
+      try {
+        return jsonResponse(await listOrders(env.DB, parsedQuery.query))
+      } catch {
+        return internalErrorResponse()
+      }
+    }
+
+    if (request.method === 'GET' && url.pathname.startsWith('/api/orders/')) {
+      const rawOrderId = url.pathname.slice('/api/orders/'.length)
+
+      if (rawOrderId.includes('/')) {
+        return jsonResponse({ ok: false, error: 'Not Found' }, 404)
+      }
+
+      const orderId = parseOrderId(rawOrderId)
+
+      if (orderId === null) {
+        return jsonResponse(
+          {
+            error: {
+              code: 'INVALID_ORDER_ID',
+              message: 'Geçersiz sipariş kimliği.',
+            },
+          },
+          400,
+        )
+      }
+
+      try {
+        const response = await getOrder(env.DB, orderId)
+
+        return response
+          ? jsonResponse(response)
+          : jsonResponse(
+              {
+                error: {
+                  code: 'ORDER_NOT_FOUND',
+                  message: 'Sipariş bulunamadı.',
+                },
+              },
+              404,
+            )
       } catch {
         return internalErrorResponse()
       }
