@@ -1,9 +1,14 @@
 import type { HealthResponse } from '../src/contracts/index.js'
 import {
+  createProduct,
   getProduct,
   listProducts,
+  parseCreateProductInput,
   parseProductId,
   parseProductsQuery,
+  parseUpdateProductInput,
+  ProductSkuConflictError,
+  updateProduct,
 } from './products.js'
 
 type Env = {
@@ -20,6 +25,44 @@ function jsonResponse(body: unknown, status = 200): Response {
       headers: jsonHeaders,
     },
   )
+}
+
+function invalidProductInputResponse(): Response {
+  return jsonResponse(
+    {
+      error: {
+        code: 'INVALID_PRODUCT_INPUT',
+        message: 'Geçersiz ürün bilgileri.',
+      },
+    },
+    400,
+  )
+}
+
+function productSkuConflictResponse(): Response {
+  return jsonResponse(
+    {
+      error: {
+        code: 'SKU_CONFLICT',
+        message: 'Bu SKU başka bir üründe kullanılıyor.',
+      },
+    },
+    409,
+  )
+}
+
+function internalErrorResponse(): Response {
+  return jsonResponse(
+    {
+      ok: false,
+      error: 'Internal Server Error',
+    },
+    500,
+  )
+}
+
+async function readJsonBody(request: Request): Promise<unknown> {
+  return request.json()
 }
 
 export default {
@@ -53,17 +96,38 @@ export default {
       try {
         return jsonResponse(await listProducts(env.DB, parsedQuery.query))
       } catch {
-        return jsonResponse(
-          {
-            ok: false,
-            error: 'Internal Server Error',
-          },
-          500,
-        )
+        return internalErrorResponse()
       }
     }
 
-    if (request.method === 'GET' && url.pathname.startsWith('/api/products/')) {
+    if (request.method === 'POST' && url.pathname === '/api/products') {
+      let body: unknown
+
+      try {
+        body = await readJsonBody(request)
+      } catch {
+        return invalidProductInputResponse()
+      }
+
+      const parsedInput = parseCreateProductInput(body)
+
+      if (!parsedInput.ok) {
+        return invalidProductInputResponse()
+      }
+
+      try {
+        return jsonResponse(await createProduct(env.DB, parsedInput.input), 201)
+      } catch (error) {
+        return error instanceof ProductSkuConflictError
+          ? productSkuConflictResponse()
+          : internalErrorResponse()
+      }
+    }
+
+    if (
+      (request.method === 'GET' || request.method === 'PATCH')
+      && url.pathname.startsWith('/api/products/')
+    ) {
       const rawProductId = url.pathname.slice('/api/products/'.length)
 
       if (rawProductId.includes('/')) {
@@ -90,8 +154,44 @@ export default {
         )
       }
 
+      if (request.method === 'GET') {
+        try {
+          const response = await getProduct(env.DB, productId)
+
+          if (!response) {
+            return jsonResponse(
+              {
+                error: {
+                  code: 'PRODUCT_NOT_FOUND',
+                  message: 'Ürün bulunamadı.',
+                },
+              },
+              404,
+            )
+          }
+
+          return jsonResponse(response)
+        } catch {
+          return internalErrorResponse()
+        }
+      }
+
+      let body: unknown
+
       try {
-        const response = await getProduct(env.DB, productId)
+        body = await readJsonBody(request)
+      } catch {
+        return invalidProductInputResponse()
+      }
+
+      const parsedInput = parseUpdateProductInput(body)
+
+      if (!parsedInput.ok) {
+        return invalidProductInputResponse()
+      }
+
+      try {
+        const response = await updateProduct(env.DB, productId, parsedInput.input)
 
         if (!response) {
           return jsonResponse(
@@ -106,14 +206,10 @@ export default {
         }
 
         return jsonResponse(response)
-      } catch {
-        return jsonResponse(
-          {
-            ok: false,
-            error: 'Internal Server Error',
-          },
-          500,
-        )
+      } catch (error) {
+        return error instanceof ProductSkuConflictError
+          ? productSkuConflictResponse()
+          : internalErrorResponse()
       }
     }
 

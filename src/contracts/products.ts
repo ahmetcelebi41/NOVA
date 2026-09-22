@@ -43,6 +43,20 @@ export type ProductDetailResponse = {
   item: ProductDetail
 }
 
+export type CreateProductInput = {
+  name: string
+  sku?: string | null
+  category: string
+  description?: string | null
+  priceMinor: number
+  stockQuantity: number
+  lowStockThreshold: number
+  publicationStatus?: ProductPublicationStatus
+  imageUrl?: string | null
+}
+
+export type UpdateProductInput = Partial<Omit<CreateProductInput, 'stockQuantity'>>
+
 export type ProductsResponse = {
   items: ProductListItem[]
   page: number
