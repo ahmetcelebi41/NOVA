@@ -8,9 +8,9 @@ import type {
   ProductsQuery,
   ProductsResponse,
   ProductStatusFilter,
-  ProductStockStatus,
   UpdateProductInput,
 } from '../src/contracts/index.js'
+import { parseStockStatus, stockStatusSql } from './stock-status.js'
 
 type ProductDetailRow = {
   id: number
@@ -233,14 +233,6 @@ function mapPublicationStatus(value: string): ProductPublicationStatus {
   throw new Error('Invalid product publication status')
 }
 
-function mapStockStatus(value: string): ProductStockStatus {
-  if (value === 'normal' || value === 'low' || value === 'out') {
-    return value
-  }
-
-  throw new Error('Invalid product stock status')
-}
-
 function mapProduct(row: ProductRow): ProductListItem {
   return {
     id: row.id,
@@ -251,7 +243,7 @@ function mapProduct(row: ProductRow): ProductListItem {
     stockQuantity: row.stock_quantity,
     lowStockThreshold: row.low_stock_threshold,
     publicationStatus: mapPublicationStatus(row.publication_status),
-    stockStatus: mapStockStatus(row.stock_status),
+    stockStatus: parseStockStatus(row.stock_status),
     imageUrl: row.image_url,
   }
 }
@@ -505,11 +497,7 @@ export async function listProducts(
       stock_quantity,
       low_stock_threshold,
       publication_status,
-      CASE
-        WHEN stock_quantity = 0 THEN 'out'
-        WHEN stock_quantity > 0 AND stock_quantity <= low_stock_threshold THEN 'low'
-        ELSE 'normal'
-      END AS stock_status,
+      ${stockStatusSql} AS stock_status,
       image_url
     FROM products
     ${whereClause}

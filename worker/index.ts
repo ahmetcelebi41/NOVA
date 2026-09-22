@@ -10,6 +10,14 @@ import {
   ProductSkuConflictError,
   updateProduct,
 } from './products.js'
+import {
+  listStock,
+  listStockMovements,
+  parseStockQuery,
+  parseUpdateStockInput,
+  StockConflictError,
+  updateStock,
+} from './stock.js'
 
 type Env = {
   DB: D1Database
@@ -61,6 +69,30 @@ function internalErrorResponse(): Response {
   )
 }
 
+function invalidStockInputResponse(): Response {
+  return jsonResponse(
+    {
+      error: {
+        code: 'INVALID_STOCK_INPUT',
+        message: 'Geçersiz stok bilgileri.',
+      },
+    },
+    400,
+  )
+}
+
+function productNotFoundResponse(): Response {
+  return jsonResponse(
+    {
+      error: {
+        code: 'PRODUCT_NOT_FOUND',
+        message: 'Ürün bulunamadı.',
+      },
+    },
+    404,
+  )
+}
+
 async function readJsonBody(request: Request): Promise<unknown> {
   return request.json()
 }
@@ -95,6 +127,28 @@ export default {
 
       try {
         return jsonResponse(await listProducts(env.DB, parsedQuery.query))
+      } catch {
+        return internalErrorResponse()
+      }
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/stock') {
+      const parsedQuery = parseStockQuery(url.searchParams)
+
+      if (!parsedQuery.ok) {
+        return jsonResponse(
+          {
+            error: {
+              code: 'INVALID_STOCK_QUERY',
+              message: 'Geçersiz stok filtreleri.',
+            },
+          },
+          400,
+        )
+      }
+
+      try {
+        return jsonResponse(await listStock(env.DB, parsedQuery.query))
       } catch {
         return internalErrorResponse()
       }
@@ -210,6 +264,89 @@ export default {
         return error instanceof ProductSkuConflictError
           ? productSkuConflictResponse()
           : internalErrorResponse()
+      }
+    }
+
+    if (url.pathname.startsWith('/api/stock/')) {
+      const stockPath = url.pathname.slice('/api/stock/'.length)
+      const segments = stockPath.split('/')
+
+      if (
+        request.method === 'GET'
+        && segments.length === 2
+        && segments[1] === 'movements'
+      ) {
+        const productId = parseProductId(segments[0] ?? '')
+
+        if (productId === null) {
+          return jsonResponse(
+            {
+              error: {
+                code: 'INVALID_PRODUCT_ID',
+                message: 'Geçersiz ürün kimliği.',
+              },
+            },
+            400,
+          )
+        }
+
+        try {
+          const response = await listStockMovements(env.DB, productId)
+
+          return response ? jsonResponse(response) : productNotFoundResponse()
+        } catch {
+          return internalErrorResponse()
+        }
+      }
+
+      if (request.method === 'PATCH' && segments.length === 1) {
+        const productId = parseProductId(segments[0] ?? '')
+
+        if (productId === null) {
+          return jsonResponse(
+            {
+              error: {
+                code: 'INVALID_PRODUCT_ID',
+                message: 'Geçersiz ürün kimliği.',
+              },
+            },
+            400,
+          )
+        }
+
+        let body: unknown
+
+        try {
+          body = await readJsonBody(request)
+        } catch {
+          return invalidStockInputResponse()
+        }
+
+        const parsedInput = parseUpdateStockInput(body)
+
+        if (!parsedInput.ok) {
+          return invalidStockInputResponse()
+        }
+
+        try {
+          const response = await updateStock(env.DB, productId, parsedInput.input)
+
+          return response ? jsonResponse(response) : productNotFoundResponse()
+        } catch (error) {
+          if (error instanceof StockConflictError) {
+            return jsonResponse(
+              {
+                error: {
+                  code: 'STOCK_CONFLICT',
+                  message: 'Stok başka bir işlem tarafından değiştirildi.',
+                },
+              },
+              409,
+            )
+          }
+
+          return internalErrorResponse()
+        }
       }
     }
 

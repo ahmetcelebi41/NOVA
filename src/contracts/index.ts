@@ -11,3 +11,14 @@ export type {
   ProductStockStatus,
   UpdateProductInput,
 } from './products.js'
+export type {
+  InventoryMovementListItem,
+  InventoryMovementsResponse,
+  InventoryMovementType,
+  StockListItem,
+  StockListResponse,
+  StockQuery,
+  StockState,
+  StockUpdateResponse,
+  UpdateStockInput,
+} from './stock.js'
