@@ -1,5 +1,16 @@
 export type { HealthResponse } from './health.js'
 export type {
+  CustomerDetail,
+  CustomerDetailResponse,
+  CustomerListItem,
+  CustomerListResponse,
+  CustomerMetrics,
+  CustomerOrderStatus,
+  CustomerRecentOrder,
+  CustomersQuery,
+  CustomerStatus,
+} from './customers.js'
+export type {
   CreateProductInput,
   ProductDetail,
   ProductDetailResponse,

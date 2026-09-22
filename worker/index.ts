@@ -1,5 +1,11 @@
 import type { HealthResponse } from '../src/contracts/index.js'
 import {
+  getCustomer,
+  listCustomers,
+  parseCustomerId,
+  parseCustomersQuery,
+} from './customers.js'
+import {
   createProduct,
   getProduct,
   listProducts,
@@ -127,6 +133,74 @@ export default {
 
       try {
         return jsonResponse(await listProducts(env.DB, parsedQuery.query))
+      } catch {
+        return internalErrorResponse()
+      }
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/customers') {
+      const parsedQuery = parseCustomersQuery(url.searchParams)
+
+      if (!parsedQuery.ok) {
+        return jsonResponse(
+          {
+            error: {
+              code: 'INVALID_CUSTOMER_QUERY',
+              message: 'Geçersiz müşteri filtreleri.',
+            },
+          },
+          400,
+        )
+      }
+
+      try {
+        return jsonResponse(await listCustomers(env.DB, parsedQuery.query))
+      } catch {
+        return internalErrorResponse()
+      }
+    }
+
+    if (request.method === 'GET' && url.pathname.startsWith('/api/customers/')) {
+      const rawCustomerId = url.pathname.slice('/api/customers/'.length)
+
+      if (rawCustomerId.includes('/')) {
+        return jsonResponse(
+          {
+            ok: false,
+            error: 'Not Found',
+          },
+          404,
+        )
+      }
+
+      const customerId = parseCustomerId(rawCustomerId)
+
+      if (customerId === null) {
+        return jsonResponse(
+          {
+            error: {
+              code: 'INVALID_CUSTOMER_ID',
+              message: 'Geçersiz müşteri kimliği.',
+            },
+          },
+          400,
+        )
+      }
+
+      try {
+        const response = await getCustomer(env.DB, customerId)
+
+        return response
+          ? jsonResponse(response)
+          : jsonResponse(
+              {
+                error: {
+                  code: 'CUSTOMER_NOT_FOUND',
+                  message: 'Müşteri bulunamadı.',
+                },
+              },
+              404,
+            )
       } catch {
         return internalErrorResponse()
       }
