@@ -1,4 +1,5 @@
 import type {
+  CreateOrderInput,
   OrderCustomerSnapshot,
   OrderDateFilter,
   OrderDelivery,
@@ -64,6 +65,43 @@ type OrderHistoryRow = {
 type CountRow = { total_items: number }
 type QueryBinding = string | number
 type OrdersQueryParseResult = { ok: true; query: OrdersQuery } | { ok: false }
+type CreateOrderParseResult = { ok: true; input: CreateOrderInput } | { ok: false }
+
+type CustomerMatchRow = { id: number; phone: string; email: string | null }
+type ProductCreateRow = {
+  id: number
+  name: string
+  sku: string | null
+  category: string
+  price_in_kurus: number
+  stock_quantity: number
+  publication_status: string
+}
+type OrderSettingsRow = {
+  delivery_fee_in_kurus: number
+  minimum_order_amount_in_kurus: number
+  delivery_enabled: number
+  pickup_enabled: number
+}
+type CreatedOrderIdRow = { id: number }
+
+export type OrderCreateErrorCode =
+  | 'CUSTOMER_MATCH_CONFLICT'
+  | 'PRODUCT_UNAVAILABLE'
+  | 'INSUFFICIENT_STOCK'
+  | 'ORDER_SETTINGS_NOT_CONFIGURED'
+  | 'MINIMUM_ORDER_NOT_MET'
+  | 'DELIVERY_METHOD_UNAVAILABLE'
+  | 'STOCK_CONFLICT'
+
+export class OrderCreateError extends Error {
+  readonly code: OrderCreateErrorCode
+
+  constructor(code: OrderCreateErrorCode) {
+    super(code)
+    this.code = code
+  }
+}
 
 const pageSize = 20
 const dayInMilliseconds = 24 * 60 * 60 * 1000
@@ -473,4 +511,366 @@ export async function getOrder(
     items: itemRows.map(mapItem),
     statusHistory: historyResult.results.map(mapHistory),
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return Object.keys(value).every((key) => keys.includes(key))
+}
+
+function isOptionalText(value: unknown): value is string | null | undefined {
+  return value === undefined || value === null || typeof value === 'string'
+}
+
+function validCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false
+  }
+
+  const date = new Date(`${value}T00:00:00.000Z`)
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+}
+
+function istanbulNowParts(now: Date): { date: string; time: string } {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Istanbul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(now)
+  const part = (type: string): string => parts.find((item) => item.type === type)?.value ?? ''
+
+  return {
+    date: `${part('year')}-${part('month')}-${part('day')}`,
+    time: `${part('hour')}:${part('minute')}`,
+  }
+}
+
+export function parseCreateOrderInput(value: unknown): CreateOrderParseResult {
+  if (!isRecord(value) || !hasOnlyKeys(value, ['customer', 'items', 'delivery', 'notes'])) {
+    return { ok: false }
+  }
+
+  const { customer, items, delivery, notes } = value
+
+  if (
+    !isRecord(customer)
+    || !hasOnlyKeys(customer, ['name', 'phone', 'email'])
+    || typeof customer.name !== 'string'
+    || !customer.name.trim()
+    || typeof customer.phone !== 'string'
+    || !customer.phone.trim()
+    || !isOptionalText(customer.email)
+    || (customer.email !== undefined && customer.email !== null
+      && !!customer.email.trim()
+      && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.email.trim()))
+    || !Array.isArray(items)
+    || items.length === 0
+    || !items.every((item) => isRecord(item)
+      && hasOnlyKeys(item, ['productId', 'quantity'])
+      && Number.isSafeInteger(item.productId)
+      && (item.productId as number) > 0
+      && Number.isSafeInteger(item.quantity)
+      && (item.quantity as number) > 0)
+    || !isRecord(delivery)
+    || !hasOnlyKeys(delivery, ['method', 'address', 'date', 'startTime', 'endTime'])
+    || (delivery.method !== 'delivery' && delivery.method !== 'pickup')
+    || !isOptionalText(delivery.address)
+    || typeof delivery.date !== 'string'
+    || !validCalendarDate(delivery.date)
+    || typeof delivery.startTime !== 'string'
+    || !/^([01]\d|2[0-3]):[0-5]\d$/.test(delivery.startTime)
+    || typeof delivery.endTime !== 'string'
+    || !/^([01]\d|2[0-3]):[0-5]\d$/.test(delivery.endTime)
+    || delivery.endTime <= delivery.startTime
+    || (delivery.method === 'delivery' && !delivery.address?.trim())
+    || !isOptionalText(notes)
+  ) {
+    return { ok: false }
+  }
+
+  const quantities = new Map<number, number>()
+
+  for (const item of items as CreateOrderInput['items']) {
+    const quantity = (quantities.get(item.productId) ?? 0) + item.quantity
+
+    if (!Number.isSafeInteger(quantity)) {
+      return { ok: false }
+    }
+
+    quantities.set(item.productId, quantity)
+  }
+
+  const now = istanbulNowParts(new Date())
+
+  if (
+    delivery.date < now.date
+    || (delivery.date === now.date && delivery.startTime <= now.time)
+  ) {
+    return { ok: false }
+  }
+
+  return {
+    ok: true,
+    input: {
+      customer: {
+        name: customer.name.trim(),
+        phone: customer.phone.trim(),
+        email: customer.email?.trim() || null,
+      },
+      items: items as CreateOrderInput['items'],
+      delivery: {
+        method: delivery.method,
+        address: delivery.method === 'delivery' ? delivery.address?.trim() ?? null : null,
+        date: delivery.date,
+        startTime: delivery.startTime,
+        endTime: delivery.endTime,
+      },
+      notes: notes?.trim() || null,
+    },
+  }
+}
+
+function normalizePhone(value: string): string {
+  return value.replace(/\D/g, '')
+}
+
+function normalizeEmail(value: string): string {
+  return value.trim().toLocaleLowerCase('tr-TR')
+}
+
+async function matchCustomer(
+  database: D1Database,
+  customer: CreateOrderInput['customer'],
+): Promise<{ id: number | null; rowCount: number }> {
+  const rows = (await database.prepare('SELECT id, phone, email FROM customers')
+    .all<CustomerMatchRow>()).results
+  const phone = normalizePhone(customer.phone)
+  const email = customer.email ? normalizeEmail(customer.email) : ''
+  const byPhone = phone
+    ? rows.filter((row) => normalizePhone(row.phone) === phone)
+    : []
+  const byEmail = email
+    ? rows.filter((row) => row.email && normalizeEmail(row.email) === email)
+    : []
+
+  if (
+    byPhone.length > 1
+    || byEmail.length > 1
+    || (byPhone.length === 1 && byEmail.length === 1 && byPhone[0].id !== byEmail[0].id)
+  ) {
+    throw new OrderCreateError('CUSTOMER_MATCH_CONFLICT')
+  }
+
+  return { id: byPhone[0]?.id ?? byEmail[0]?.id ?? null, rowCount: rows.length }
+}
+
+function aggregateItems(items: CreateOrderInput['items']): Map<number, number> {
+  const quantities = new Map<number, number>()
+
+  for (const item of items) {
+    const quantity = (quantities.get(item.productId) ?? 0) + item.quantity
+
+    quantities.set(item.productId, quantity)
+  }
+
+  return quantities
+}
+
+export async function createOrder(
+  database: D1Database,
+  input: CreateOrderInput,
+): Promise<OrderDetailResponse> {
+  const customer = await matchCustomer(database, input.customer)
+  const quantities = aggregateItems(input.items)
+  const ids = [...quantities.keys()]
+  const placeholders = ids.map(() => '?').join(', ')
+  const [productResult, settings] = await Promise.all([
+    database.prepare(`
+      SELECT id, name, sku, category, price_in_kurus, stock_quantity, publication_status
+      FROM products WHERE id IN (${placeholders})
+    `).bind(...ids).all<ProductCreateRow>(),
+    database.prepare(`
+      SELECT delivery_fee_in_kurus, minimum_order_amount_in_kurus,
+        delivery_enabled, pickup_enabled
+      FROM settings WHERE id = 1
+    `).first<OrderSettingsRow>(),
+  ])
+  const products = new Map(productResult.results.map((product) => [product.id, product]))
+
+  for (const id of ids) {
+    const product = products.get(id)
+
+    if (!product || product.publication_status !== 'active') {
+      throw new OrderCreateError('PRODUCT_UNAVAILABLE')
+    }
+
+    if (product.stock_quantity < (quantities.get(id) ?? 0)) {
+      throw new OrderCreateError('INSUFFICIENT_STOCK')
+    }
+  }
+
+  if (!settings) {
+    throw new OrderCreateError('ORDER_SETTINGS_NOT_CONFIGURED')
+  }
+
+  if (
+    (input.delivery.method === 'delivery' && settings.delivery_enabled !== 1)
+    || (input.delivery.method === 'pickup' && settings.pickup_enabled !== 1)
+  ) {
+    throw new OrderCreateError('DELIVERY_METHOD_UNAVAILABLE')
+  }
+
+  let subtotal = 0
+
+  for (const id of ids) {
+    const product = products.get(id)!
+    const lineTotal = product.price_in_kurus * quantities.get(id)!
+    subtotal += lineTotal
+
+    if (!Number.isSafeInteger(lineTotal) || !Number.isSafeInteger(subtotal)) {
+      throw new Error('Invalid order total')
+    }
+  }
+
+  if (subtotal < settings.minimum_order_amount_in_kurus) {
+    throw new OrderCreateError('MINIMUM_ORDER_NOT_MET')
+  }
+
+  const fee = input.delivery.method === 'delivery' ? settings.delivery_fee_in_kurus : 0
+  const total = subtotal + fee
+
+  if (!Number.isSafeInteger(total)) {
+    throw new Error('Invalid order total')
+  }
+
+  const token = `__pending__${crypto.randomUUID()}`
+  const now = new Date().toISOString()
+  const statements: D1PreparedStatement[] = []
+
+  if (customer.id === null) {
+    statements.push(database.prepare(`
+      INSERT INTO customers (name, phone, email)
+      SELECT ?, ?, ? WHERE (SELECT COUNT(*) FROM customers) = ?
+    `).bind(input.customer.name, input.customer.phone, input.customer.email ?? null,
+      customer.rowCount))
+  }
+
+  statements.push(database.prepare(`
+    INSERT INTO orders (
+      order_number, customer_id, customer_name_snapshot, customer_phone_snapshot,
+      customer_email_snapshot, delivery_method, delivery_address_snapshot,
+      delivery_date, delivery_start_time, delivery_end_time, notes,
+      subtotal_in_kurus, delivery_fee_in_kurus, total_in_kurus, status
+    ) VALUES (
+      ?, CASE WHEN ? = 1 THEN last_insert_rowid() ELSE ? END,
+      CASE WHEN (? = 0 OR changes() = 1)
+        AND (SELECT COUNT(*) FROM customers) = ? AND
+        EXISTS (SELECT 1 FROM settings WHERE id = 1
+          AND delivery_fee_in_kurus = ? AND minimum_order_amount_in_kurus = ?
+          AND delivery_enabled = ? AND pickup_enabled = ?)
+        THEN ? ELSE NULL END,
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new'
+    )
+  `).bind(
+    token,
+    customer.id === null ? 1 : 0,
+    customer.id,
+    customer.id === null ? 1 : 0,
+    customer.rowCount + (customer.id === null ? 1 : 0),
+    settings.delivery_fee_in_kurus,
+    settings.minimum_order_amount_in_kurus,
+    settings.delivery_enabled,
+    settings.pickup_enabled,
+    input.customer.name,
+    input.customer.phone,
+    input.customer.email ?? null,
+    input.delivery.method,
+    input.delivery.address ?? null,
+    input.delivery.date,
+    input.delivery.startTime,
+    input.delivery.endTime,
+    input.notes ?? null,
+    subtotal,
+    fee,
+    total,
+  ))
+
+  for (const id of ids) {
+    const product = products.get(id)!
+    const quantity = quantities.get(id)!
+    statements.push(database.prepare(`
+      INSERT INTO order_items (
+        order_id, product_id, product_name_snapshot, product_sku_snapshot,
+        product_category_snapshot, unit_price_in_kurus, quantity, line_total_in_kurus
+      ) VALUES ((SELECT id FROM orders WHERE order_number = ?), ?, ?, ?, ?, ?, ?, ?)
+    `).bind(token, id, product.name, product.sku, product.category,
+      product.price_in_kurus, quantity, product.price_in_kurus * quantity))
+    statements.push(database.prepare(`
+      UPDATE products SET stock_quantity = stock_quantity - ?, updated_at = ?
+      WHERE id = ? AND publication_status = 'active' AND price_in_kurus = ?
+        AND name = ? AND sku IS ? AND category = ?
+        AND stock_quantity = ? AND stock_quantity >= ?
+    `).bind(quantity, now, id, product.price_in_kurus, product.name,
+      product.sku, product.category, product.stock_quantity, quantity))
+    statements.push(database.prepare(`
+      INSERT INTO inventory_movements (
+        product_id, order_id, movement_type, quantity_delta, resulting_stock
+      ) VALUES (
+        CASE WHEN changes() = 1 THEN ? ELSE NULL END,
+        (SELECT id FROM orders WHERE order_number = ?), 'order_created', ?,
+        (SELECT stock_quantity FROM products WHERE id = ?)
+      )
+    `).bind(id, token, -quantity, id))
+  }
+
+  const orderIdResultIndex = statements.length
+  statements.push(database.prepare('SELECT id FROM orders WHERE order_number = ?').bind(token))
+  statements.push(database.prepare(`
+    UPDATE orders SET order_number = 'NOVA-' || printf('%06d', id)
+    WHERE order_number = ?
+  `).bind(token))
+  // AUTOINCREMENT's sequence identifies this batch's new order. A missing final
+  // update makes order_id NULL and aborts the batch instead of committing a token.
+  statements.push(database.prepare(`
+    INSERT INTO order_status_history (order_id, status)
+    VALUES (
+      CASE WHEN changes() = 1 THEN
+        (SELECT id FROM orders
+          WHERE id = (SELECT seq FROM sqlite_sequence WHERE name = 'orders')
+            AND order_number = 'NOVA-' || printf('%06d', id))
+      ELSE NULL END,
+      'new'
+    )
+  `))
+
+  let results: D1Result[]
+
+  try {
+    results = await database.batch(statements)
+  } catch {
+    // Any failed guarded update deliberately makes the next NOT NULL insert fail.
+    // D1 rolls back the entire batch, including a new customer and earlier items.
+    throw new OrderCreateError('STOCK_CONFLICT')
+  }
+
+  const orderId = (results[orderIdResultIndex]?.results as CreatedOrderIdRow[] | undefined)?.[0]?.id
+
+  if (!orderId || !Number.isSafeInteger(orderId)) {
+    throw new Error('Committed order ID missing')
+  }
+
+  const detail = await getOrder(database, orderId)
+
+  if (!detail) {
+    throw new Error('Committed order missing')
+  }
+
+  return detail
 }

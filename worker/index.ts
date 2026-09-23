@@ -5,7 +5,15 @@ import {
   parseCustomerId,
   parseCustomersQuery,
 } from './customers.js'
-import { getOrder, listOrders, parseOrderId, parseOrdersQuery } from './orders.js'
+import {
+  createOrder,
+  getOrder,
+  listOrders,
+  OrderCreateError,
+  parseCreateOrderInput,
+  parseOrderId,
+  parseOrdersQuery,
+} from './orders.js'
 import {
   createProduct,
   getProduct,
@@ -180,6 +188,34 @@ export default {
         return jsonResponse(await listOrders(env.DB, parsedQuery.query))
       } catch {
         return internalErrorResponse()
+      }
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/orders') {
+      let body: unknown
+
+      try {
+        body = await readJsonBody(request)
+      } catch {
+        return jsonResponse({
+          error: { code: 'INVALID_ORDER_INPUT', message: 'Geçersiz sipariş bilgileri.' },
+        }, 400)
+      }
+
+      const parsedInput = parseCreateOrderInput(body)
+
+      if (!parsedInput.ok) {
+        return jsonResponse({
+          error: { code: 'INVALID_ORDER_INPUT', message: 'Geçersiz sipariş bilgileri.' },
+        }, 400)
+      }
+
+      try {
+        return jsonResponse(await createOrder(env.DB, parsedInput.input), 201)
+      } catch (error) {
+        return error instanceof OrderCreateError
+          ? jsonResponse({ error: { code: error.code, message: 'Sipariş oluşturulamadı.' } }, 409)
+          : internalErrorResponse()
       }
     }
 

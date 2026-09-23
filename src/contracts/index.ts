@@ -1,5 +1,6 @@
 export type { HealthResponse } from './health.js'
 export type {
+  CreateOrderInput,
   OrderCustomerSnapshot,
   OrderDateFilter,
   OrderDelivery,

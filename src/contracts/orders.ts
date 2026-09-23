@@ -15,6 +15,23 @@ export type OrdersQuery = {
   page: number
 }
 
+export type CreateOrderInput = {
+  customer: {
+    name: string
+    phone: string
+    email?: string | null
+  }
+  items: { productId: number; quantity: number }[]
+  delivery: {
+    method: 'delivery' | 'pickup'
+    address?: string | null
+    date: string
+    startTime: string
+    endTime: string
+  }
+  notes?: string | null
+}
+
 export type OrderListItem = {
   id: number
   orderNumber: string
