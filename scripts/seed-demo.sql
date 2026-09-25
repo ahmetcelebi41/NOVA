@@ -1,6 +1,55 @@
 -- NOVA production portfolio demo data.
--- Apply only to an empty nova-prod database after verifying all business table counts are zero.
+-- Apply only to nova-prod. Re-seeding is allowed only when the database is empty
+-- or still matches the known NOVA demo dataset fingerprint below.
 PRAGMA foreign_keys = ON;
+
+DROP TABLE IF EXISTS _demo_seed_guard;
+CREATE TABLE _demo_seed_guard (
+  allowed INTEGER NOT NULL CHECK (allowed = 1)
+);
+
+INSERT INTO _demo_seed_guard (allowed)
+SELECT CASE WHEN
+  (
+    (SELECT COUNT(*) FROM settings) = 0
+    AND (SELECT COUNT(*) FROM products) = 0
+    AND (SELECT COUNT(*) FROM customers) = 0
+    AND (SELECT COUNT(*) FROM orders) = 0
+    AND (SELECT COUNT(*) FROM order_items) = 0
+    AND (SELECT COUNT(*) FROM order_status_history) = 0
+    AND (SELECT COUNT(*) FROM inventory_movements) = 0
+  )
+  OR
+  (
+    (SELECT COUNT(*) FROM settings WHERE id = 1 AND business_name = 'NOVA Market') = 1
+    AND (SELECT COUNT(*) FROM products) = 12
+    AND (SELECT COUNT(*) FROM products WHERE id BETWEEN 1 AND 12 AND sku IN (
+      'KHV-001', 'KHV-002', 'AKS-001', 'AKS-002', 'EKP-001', 'EKP-002',
+      'CAY-001', 'ATI-001', 'AMB-001', 'AKS-003', 'KHV-003', 'EKP-003'
+    )) = 12
+    AND (SELECT SUM(stock_quantity) FROM products) = 133
+    AND (SELECT COUNT(*) FROM customers WHERE id BETWEEN 1 AND 8) = 8
+    AND (SELECT COUNT(*) FROM orders WHERE id BETWEEN 1 AND 15
+      AND order_number = 'NOVA-' || printf('%06d', id)) = 15
+    AND (SELECT COUNT(*) FROM orders WHERE status = 'new') = 3
+    AND (SELECT COUNT(*) FROM orders WHERE status = 'preparing') = 2
+    AND (SELECT COUNT(*) FROM orders WHERE status = 'ready_for_delivery') = 2
+    AND (SELECT COUNT(*) FROM orders WHERE status = 'completed') = 6
+    AND (SELECT COUNT(*) FROM orders WHERE status = 'cancelled') = 2
+    AND (SELECT COUNT(*) FROM order_items) = 26
+    AND (SELECT COUNT(*) FROM order_status_history) = 42
+    AND (SELECT COUNT(*) FROM inventory_movements) = 28
+  )
+THEN 1 ELSE 0 END;
+
+DELETE FROM inventory_movements;
+DELETE FROM order_status_history;
+DELETE FROM order_items;
+DELETE FROM orders;
+DELETE FROM customers;
+DELETE FROM products;
+DELETE FROM settings;
+DROP TABLE _demo_seed_guard;
 
 INSERT INTO settings (
   id, business_name, email, phone, address,
@@ -26,7 +75,7 @@ INSERT INTO products (
   (6, 'Cam Demlik 800 ml', 'EKP-002', 'Ekipman', 'Paslanmaz filtreli borosilikat cam demlik.', 54990, 12, 4, NULL, 'active', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-125 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day', '-4 hours')),
   (7, 'Bitki Çayı Seçki Kutusu', 'CAY-001', 'Çay', 'Altı farklı harmandan oluşan seçki kutusu.', 42990, 2, 3, NULL, 'active', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-120 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-5 hours')),
   (8, 'El Yapımı Çikolata Kutusu', 'ATI-001', 'Atıştırmalık', 'Karışık dolgulu 12 parça çikolata.', 37990, 18, 5, NULL, 'active', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-115 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour')),
-  (9, 'Kraft Hediye Paketi', 'AMB-001', 'Ambalaj', 'Kurdeleli geri dönüştürülebilir hediye paketi.', 7990, 40, 10, NULL, 'active', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-110 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 hours')),
+  (9, 'Kraft Hediye Paketi', 'AMB-001', 'Hediye & Ambalaj', 'Kurdeleli geri dönüştürülebilir hediye paketi.', 7990, 40, 10, NULL, 'active', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-110 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 hours')),
   (10, 'NOVA Bez Çanta', 'AKS-003', 'Aksesuar', 'Pamuklu, uzun saplı günlük bez çanta.', 14990, 0, 4, NULL, 'inactive', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-105 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-95 days', '-2 hours')),
   (11, 'Espresso Blend 500 g', 'KHV-003', 'Kahve', 'Çikolata ve fındık notalı espresso harmanı.', 45990, 14, 5, NULL, 'active', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-100 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day', '-3 hours')),
   (12, 'Soğuk Demleme Şişesi', 'EKP-003', 'Ekipman', 'Filtreli 650 ml cold brew şişesi.', 39990, 7, 2, NULL, 'active', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-90 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-3 days', '-4 hours'));
@@ -74,13 +123,13 @@ INSERT INTO order_items (
   (1, 1, 1, 'Anadolu Filtre Kahve 250 g', 'KHV-001', 'Kahve', 28990, 2, 57980),
   (2, 1, 8, 'El Yapımı Çikolata Kutusu', 'ATI-001', 'Atıştırmalık', 37990, 1, 37990),
   (3, 2, 2, 'Geleneksel Türk Kahvesi 250 g', 'KHV-002', 'Kahve', 19990, 1, 19990),
-  (4, 2, 9, 'Kraft Hediye Paketi', 'AMB-001', 'Ambalaj', 7990, 1, 7990),
+  (4, 2, 9, 'Kraft Hediye Paketi', 'AMB-001', 'Hediye & Ambalaj', 7990, 1, 7990),
   (5, 3, 4, 'Çelik Termos 750 ml', 'AKS-002', 'Aksesuar', 79990, 1, 79990),
   (6, 4, 7, 'Bitki Çayı Seçki Kutusu', 'CAY-001', 'Çay', 42990, 2, 85980),
-  (7, 4, 9, 'Kraft Hediye Paketi', 'AMB-001', 'Ambalaj', 7990, 1, 7990),
+  (7, 4, 9, 'Kraft Hediye Paketi', 'AMB-001', 'Hediye & Ambalaj', 7990, 1, 7990),
   (8, 5, 5, 'French Press 600 ml', 'EKP-001', 'Ekipman', 64990, 1, 64990),
   (9, 6, 11, 'Espresso Blend 500 g', 'KHV-003', 'Kahve', 45990, 2, 91980),
-  (10, 6, 9, 'Kraft Hediye Paketi', 'AMB-001', 'Ambalaj', 7990, 1, 7990),
+  (10, 6, 9, 'Kraft Hediye Paketi', 'AMB-001', 'Hediye & Ambalaj', 7990, 1, 7990),
   (11, 7, 6, 'Cam Demlik 800 ml', 'EKP-002', 'Ekipman', 54990, 1, 54990),
   (12, 7, 8, 'El Yapımı Çikolata Kutusu', 'ATI-001', 'Atıştırmalık', 37990, 2, 75980),
   (13, 8, 1, 'Anadolu Filtre Kahve 250 g', 'KHV-001', 'Kahve', 28990, 1, 28990),
@@ -89,12 +138,12 @@ INSERT INTO order_items (
   (16, 10, 2, 'Geleneksel Türk Kahvesi 250 g', 'KHV-002', 'Kahve', 19990, 3, 59970),
   (17, 10, 8, 'El Yapımı Çikolata Kutusu', 'ATI-001', 'Atıştırmalık', 37990, 1, 37990),
   (18, 11, 4, 'Çelik Termos 750 ml', 'AKS-002', 'Aksesuar', 79990, 1, 79990),
-  (19, 11, 9, 'Kraft Hediye Paketi', 'AMB-001', 'Ambalaj', 7990, 2, 15980),
+  (19, 11, 9, 'Kraft Hediye Paketi', 'AMB-001', 'Hediye & Ambalaj', 7990, 2, 15980),
   (20, 12, 6, 'Cam Demlik 800 ml', 'EKP-002', 'Ekipman', 54990, 1, 54990),
   (21, 12, 7, 'Bitki Çayı Seçki Kutusu', 'CAY-001', 'Çay', 42990, 1, 42990),
   (22, 13, 11, 'Espresso Blend 500 g', 'KHV-003', 'Kahve', 45990, 1, 45990),
   (23, 14, 10, 'NOVA Bez Çanta', 'AKS-003', 'Aksesuar', 14990, 2, 29980),
-  (24, 14, 9, 'Kraft Hediye Paketi', 'AMB-001', 'Ambalaj', 7990, 1, 7990),
+  (24, 14, 9, 'Kraft Hediye Paketi', 'AMB-001', 'Hediye & Ambalaj', 7990, 1, 7990),
   (25, 15, 5, 'French Press 600 ml', 'EKP-001', 'Ekipman', 64990, 1, 64990),
   (26, 15, 12, 'Soğuk Demleme Şişesi', 'EKP-003', 'Ekipman', 39990, 1, 39990);
 
