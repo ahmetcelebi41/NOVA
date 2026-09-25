@@ -50,3 +50,4 @@ export type {
   StockUpdateResponse,
   UpdateStockInput,
 } from './stock.js'
+export type { SettingsResponse, UpdateSettingsInput } from './settings.js'

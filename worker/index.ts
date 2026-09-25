@@ -28,6 +28,7 @@ import {
   ProductSkuConflictError,
   updateProduct,
 } from './products.js'
+import { getSettings, parseUpdateSettingsInput, putSettings } from './settings.js'
 import {
   listStock,
   listStockMovements,
@@ -126,6 +127,49 @@ export default {
       }
 
       return jsonResponse(response)
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/settings') {
+      try {
+        const settings = await getSettings(env.DB)
+
+        return settings
+          ? jsonResponse(settings)
+          : jsonResponse({
+              error: {
+                code: 'SETTINGS_NOT_CONFIGURED',
+                message: 'İşletme ayarları yapılandırılmadı.',
+              },
+            }, 404)
+      } catch {
+        return internalErrorResponse()
+      }
+    }
+
+    if (request.method === 'PUT' && url.pathname === '/api/settings') {
+      let body: unknown
+
+      try {
+        body = await readJsonBody(request)
+      } catch {
+        return jsonResponse({
+          error: { code: 'INVALID_SETTINGS_INPUT', message: 'Geçersiz işletme ayarları.' },
+        }, 400)
+      }
+
+      const input = parseUpdateSettingsInput(body)
+
+      if (!input) {
+        return jsonResponse({
+          error: { code: 'INVALID_SETTINGS_INPUT', message: 'Geçersiz işletme ayarları.' },
+        }, 400)
+      }
+
+      try {
+        return jsonResponse(await putSettings(env.DB, input))
+      } catch {
+        return internalErrorResponse()
+      }
     }
 
     if (request.method === 'GET' && url.pathname === '/api/products') {
