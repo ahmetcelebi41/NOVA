@@ -378,6 +378,24 @@
   font-weight: var(--font-weight-semibold);
 }
 
+.order-create-summary__error {
+  margin-top: var(--space-16) !important;
+  color: var(--color-primary);
+  font-size: var(--text-13);
+  font-weight: var(--font-weight-semibold);
+}
+
+.order-create-page__settings-error button,
+.order-create-product-feedback button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+}
+
 .order-create-summary button {
   width: 100%;
   margin-top: var(--space-24);

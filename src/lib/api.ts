@@ -6,12 +6,14 @@ type ApiErrorBody = {
 }
 
 export class ApiError extends Error {
+  apiMessage: string | null
   code: string | null
   status: number
 
-  constructor(status: number, code: string | null) {
-    super(`API request failed with status ${status}`)
+  constructor(status: number, code: string | null, apiMessage: string | null) {
+    super(apiMessage ?? `API request failed with status ${status}`)
     this.name = 'ApiError'
+    this.apiMessage = apiMessage
     this.code = code
     this.status = status
   }
@@ -39,7 +41,8 @@ export async function apiJson<T>(
     }
 
     const code = typeof body?.error?.code === 'string' ? body.error.code : null
-    throw new ApiError(response.status, code)
+    const message = typeof body?.error?.message === 'string' ? body.error.message : null
+    throw new ApiError(response.status, code, message)
   }
 
   return response.json() as Promise<T>
