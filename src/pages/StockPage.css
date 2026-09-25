@@ -32,6 +32,16 @@
   opacity: 0.68;
 }
 
+.stock-page__feedback {
+  padding: var(--space-12) var(--space-16);
+  border: 1px solid currentColor;
+  border-radius: var(--radius-8);
+  margin: 0;
+  color: var(--color-primary);
+  font-size: var(--text-13);
+  font-weight: var(--font-weight-semibold);
+}
+
 .stock-quick-section,
 .stock-toolbar,
 .stock-list-section {
@@ -489,6 +499,11 @@
   border-color: var(--color-primary);
   background: var(--color-primary);
   color: var(--color-surface);
+}
+
+.stock-dialog button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 @media (hover: hover) and (pointer: fine) {

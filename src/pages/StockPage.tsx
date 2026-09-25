@@ -1,13 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
+import type {
+  ProductStockStatus,
+} from '../contracts/products'
+import type {
+  StockListItem,
+  StockListResponse,
+  StockUpdateResponse,
+} from '../contracts/stock'
+import { ApiError, apiJson } from '../lib/api'
 import './StockPage.css'
-import {
-  productDemoData,
-  type ProductDemoRecord,
-  type ProductStockStatus,
-} from './products/productDemoData'
+import { productCategoryOptions } from './products/productDemoData'
 
 type StockFilter = '' | 'normal' | 'dusuk' | 'tukendi'
 
@@ -18,9 +23,9 @@ type StockFormValues = {
 type StockActionsProps = {
   isOpen: boolean
   menuKey: string
-  onOpenUpdate: (product: ProductDemoRecord) => void
+  onOpenUpdate: (product: StockListItem) => void
   onToggle: (menuKey: string, trigger: HTMLButtonElement) => void
-  product: ProductDemoRecord
+  product: StockListItem
 }
 
 const itemsPerPage = 20
@@ -33,17 +38,20 @@ const quickFilters: { label: string; value: StockFilter }[] = [
 ]
 
 const quickFilterLabels = new Map(quickFilters.map((filter) => [filter.value, filter.label]))
+const categoryLabels = new Map<string, string>(
+  productCategoryOptions.map((category) => [category.value, category.label]),
+)
 const validFilterValues = new Set<StockFilter>(quickFilters.map((filter) => filter.value))
 const filterStatusMap: Record<Exclude<StockFilter, ''>, ProductStockStatus> = {
-  dusuk: 'Düşük Stok',
-  normal: 'Normal',
-  tukendi: 'Tükendi',
+  dusuk: 'low',
+  normal: 'normal',
+  tukendi: 'out',
 }
 
 const statusLabels: Record<ProductStockStatus, string> = {
-  'Düşük Stok': 'Düşük',
-  Normal: 'Normal',
-  Tükendi: 'Tükendi',
+  low: 'Düşük',
+  normal: 'Normal',
+  out: 'Tükendi',
 }
 
 const stockValueSchema = z
@@ -99,9 +107,9 @@ function StockCards({
   products,
 }: {
   openMenuKey: string | null
-  onOpenUpdate: (product: ProductDemoRecord) => void
+  onOpenUpdate: (product: StockListItem) => void
   onToggleMenu: (menuKey: string, trigger: HTMLButtonElement) => void
-  products: ProductDemoRecord[]
+  products: StockListItem[]
 }) {
   return (
     <ul className="stock-cards">
@@ -118,11 +126,11 @@ function StockCards({
               <dl>
                 <div>
                   <dt>Kategori</dt>
-                  <dd>{product.category}</dd>
+                  <dd>{categoryLabels.get(product.category) ?? product.category}</dd>
                 </div>
                 <div>
                   <dt>Mevcut Stok</dt>
-                  <dd>{product.stock}</dd>
+                  <dd>{product.stockQuantity}</dd>
                 </div>
                 <div>
                   <dt>Düşük Stok Eşiği</dt>
@@ -158,9 +166,9 @@ function StockTable({
   products,
 }: {
   openMenuKey: string | null
-  onOpenUpdate: (product: ProductDemoRecord) => void
+  onOpenUpdate: (product: StockListItem) => void
   onToggleMenu: (menuKey: string, trigger: HTMLButtonElement) => void
-  products: ProductDemoRecord[]
+  products: StockListItem[]
 }) {
   return (
     <table className="stock-table">
@@ -188,8 +196,8 @@ function StockTable({
                 <strong>{product.name}</strong>
                 <span className="stock-table__sku">{product.sku}</span>
               </td>
-              <td>{product.category}</td>
-              <td className="stock-table__number">{product.stock}</td>
+              <td>{categoryLabels.get(product.category) ?? product.category}</td>
+              <td className="stock-table__number">{product.stockQuantity}</td>
               <td className="stock-table__number">{product.lowStockThreshold}</td>
               <td>
                 <span className="stock-status">{statusLabels[product.stockStatus]}</span>
@@ -213,23 +221,25 @@ function StockTable({
 
 function StockUpdateDialog({
   onClose,
+  onUpdated,
   product,
   returnFocusTo,
 }: {
   onClose: () => void
-  product: ProductDemoRecord
+  onUpdated: (response: StockUpdateResponse) => void
+  product: StockListItem
   returnFocusTo: HTMLButtonElement | null
 }) {
   const dialogRef = useRef<HTMLElement>(null)
-  const [validated, setValidated] = useState(false)
+  const [submitError, setSubmitError] = useState('')
   const {
-    formState: { errors },
+    formState: { errors, isSubmitting },
     handleSubmit,
     register,
     setError,
     setFocus,
   } = useForm<StockFormValues>({
-    defaultValues: { stock: String(product.stock) },
+    defaultValues: { stock: String(product.stockQuantity) },
   })
 
   useEffect(() => {
@@ -276,11 +286,10 @@ function StockUpdateDialog({
     }
   }, [onClose, returnFocusTo, setFocus])
 
-  const submit = (values: StockFormValues) => {
+  const submit = async (values: StockFormValues) => {
     const result = stockValueSchema.safeParse(values.stock)
 
     if (!result.success) {
-      setValidated(false)
       setError('stock', {
         message: result.error.issues[0]?.message,
         type: 'validate',
@@ -289,7 +298,29 @@ function StockUpdateDialog({
       return
     }
 
-    setValidated(true)
+    setSubmitError('')
+
+    try {
+      const response = await apiJson<StockUpdateResponse>(`/api/stock/${product.id}`, {
+        body: JSON.stringify({ stockQuantity: Number(result.data) }),
+        method: 'PATCH',
+      })
+      onUpdated(response)
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'INVALID_STOCK_INPUT') {
+        setError('stock', {
+          message: 'Yeni stok değeri 0 veya daha büyük bir tam sayı olmalıdır.',
+          type: 'server',
+        })
+        setFocus('stock')
+      } else if (error instanceof ApiError && error.code === 'STOCK_CONFLICT') {
+        setSubmitError('Stok başka bir işlem tarafından değiştirildi. Listeyi yenileyip tekrar deneyin.')
+      } else if (error instanceof ApiError && error.code === 'PRODUCT_NOT_FOUND') {
+        setSubmitError('Ürün artık mevcut değil. Listeyi yenileyip tekrar deneyin.')
+      } else {
+        setSubmitError('Stok güncellenemedi. Bağlantıyı kontrol edip yeniden deneyin.')
+      }
+    }
   }
 
   return (
@@ -310,7 +341,7 @@ function StockUpdateDialog({
         <dl className="stock-dialog__summary">
           <div>
             <dt>Mevcut stok</dt>
-            <dd>{product.stock}</dd>
+            <dd>{product.stockQuantity}</dd>
           </div>
           <div>
             <dt>Stok durumu</dt>
@@ -336,7 +367,7 @@ function StockUpdateDialog({
               step="1"
               type="number"
               {...register('stock', {
-                onChange: () => setValidated(false),
+                onChange: () => setSubmitError(''),
               })}
             />
             {errors.stock?.message ? (
@@ -347,12 +378,12 @@ function StockUpdateDialog({
           </div>
 
           <p className="stock-dialog__note" id="stock-dialog-description">
-            Bu demo işlem değeri doğrular; ürün stoğunu kalıcı olarak değiştirmez.
+            Kaydettiğiniz yeni stok değeri ürünün hareket geçmişine işlenir.
           </p>
 
-          {validated ? (
-            <p className="stock-dialog__result" role="status">
-              Yeni stok değeri doğrulandı. Demo veride değişiklik yapılmadı.
+          {submitError ? (
+            <p className="stock-dialog__error" role="alert">
+              {submitError}
             </p>
           ) : null}
 
@@ -360,8 +391,8 @@ function StockUpdateDialog({
             <button onClick={onClose} type="button">
               İptal
             </button>
-            <button className="stock-dialog__submit" type="submit">
-              Değeri Doğrula
+            <button className="stock-dialog__submit" disabled={isSubmitting} type="submit">
+              {isSubmitting ? 'Kaydediliyor…' : 'Stoku Güncelle'}
             </button>
           </div>
         </form>
@@ -372,9 +403,16 @@ function StockUpdateDialog({
 
 function StockPage() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const [loadState, setLoadState] = useState<{
+    error: boolean
+    requestKey: string
+    response: StockListResponse | null
+  }>({ error: false, requestKey: '', response: null })
+  const [reloadKey, setReloadKey] = useState(0)
+  const [feedback, setFeedback] = useState('')
   const [openMenuKey, setOpenMenuKey] = useState<string | null>(null)
   const [modalReturnFocusTo, setModalReturnFocusTo] = useState<HTMLButtonElement | null>(null)
-  const [selectedProduct, setSelectedProduct] = useState<ProductDemoRecord | null>(null)
+  const [selectedProduct, setSelectedProduct] = useState<StockListItem | null>(null)
   const actionContainerRef = useRef<HTMLElement | null>(null)
   const actionTriggerRef = useRef<HTMLButtonElement | null>(null)
   const requestedFilter = searchParams.get('durum') ?? ''
@@ -400,38 +438,47 @@ function StockPage() {
     [searchParams, setSearchParams],
   )
 
-  const filteredProducts = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase('tr-TR')
-
-    return productDemoData
-      .filter((product) => {
-        if (selectedFilter && product.stockStatus !== filterStatusMap[selectedFilter]) {
-          return false
-        }
-
-        if (!normalizedQuery) {
-          return true
-        }
-
-        return [product.name, product.sku].some((value) =>
-          value.toLocaleLowerCase('tr-TR').includes(normalizedQuery),
-        )
-      })
-      .toSorted(
-        (first, second) =>
-          first.stock - second.stock || first.name.localeCompare(second.name, 'tr-TR'),
-      )
-  }, [query, selectedFilter])
-
   const requestedPageValue = Number(searchParams.get('sayfa') ?? '1')
-  const requestedPage = Number.isInteger(requestedPageValue) ? requestedPageValue : 1
-  const pageCount = Math.max(1, Math.ceil(filteredProducts.length / itemsPerPage))
-  const currentPage = Math.min(Math.max(requestedPage, 1), pageCount)
-  const visibleProducts = filteredProducts.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage,
-  )
+  const currentPage = Number.isSafeInteger(requestedPageValue) && requestedPageValue > 0
+    ? requestedPageValue
+    : 1
+  const apiSearchParams = new URLSearchParams({ page: String(currentPage) })
+
+  if (selectedFilter) {
+    apiSearchParams.set('status', filterStatusMap[selectedFilter])
+  }
+  if (query.trim()) {
+    apiSearchParams.set('q', query.trim())
+  }
+
+  const apiQuery = apiSearchParams.toString()
+  const requestKey = `${apiQuery}|${reloadKey}`
+  const isLoading = loadState.requestKey !== requestKey
+  const loadError = !isLoading && loadState.error
+  const response = isLoading ? null : loadState.response
+  const pageCount = Math.max(1, response?.totalPages ?? 1)
+  const visibleProducts = response?.items ?? []
   const hasActiveFilters = Boolean(selectedFilter || query)
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    void apiJson<StockListResponse>(`/api/stock?${apiQuery}`, {
+      signal: controller.signal,
+    })
+      .then((nextResponse) => setLoadState({
+        error: false,
+        requestKey,
+        response: nextResponse,
+      }))
+      .catch((error: unknown) => {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          setLoadState({ error: true, requestKey, response: null })
+        }
+      })
+
+    return () => controller.abort()
+  }, [apiQuery, requestKey])
 
   useEffect(() => {
     const nextParams = new URLSearchParams(searchParams)
@@ -442,16 +489,20 @@ function StockPage() {
       nextParams.delete('durum')
     }
 
-    if (currentPage === 1) {
+    const normalizedCurrentPage = response?.totalPages && currentPage > response.totalPages
+      ? response.totalPages
+      : currentPage
+
+    if (normalizedCurrentPage === 1) {
       nextParams.delete('sayfa')
     } else {
-      nextParams.set('sayfa', String(currentPage))
+      nextParams.set('sayfa', String(normalizedCurrentPage))
     }
 
     if (nextParams.toString() !== searchParams.toString()) {
       setSearchParams(nextParams, { replace: true })
     }
-  }, [currentPage, searchParams, selectedFilter, setSearchParams])
+  }, [currentPage, response?.totalPages, searchParams, selectedFilter, setSearchParams])
 
   useEffect(() => {
     if (!openMenuKey) {
@@ -499,7 +550,7 @@ function StockPage() {
     setOpenMenuKey(menuKey)
   }
 
-  const openUpdateDialog = (product: ProductDemoRecord) => {
+  const openUpdateDialog = (product: StockListItem) => {
     setModalReturnFocusTo(actionTriggerRef.current)
     setOpenMenuKey(null)
     setSelectedProduct(product)
@@ -521,13 +572,25 @@ function StockPage() {
     setSearchParams({})
   }
 
+  const handleStockUpdated = () => {
+    setSelectedProduct(null)
+    setFeedback('Stok başarıyla güncellendi.')
+    setReloadKey((value) => value + 1)
+  }
+
   return (
     <div className="stock-page">
       <div inert={selectedProduct ? true : undefined}>
         <header className="stock-page__header">
           <h1 id="page-title">Stok</h1>
-          <p>Ürün stoklarını izleyin ve güncelleme değerlerini doğrulayın.</p>
+          <p>Ürün stoklarını izleyin ve güncelleyin.</p>
         </header>
+
+        {feedback ? (
+          <p className="stock-page__feedback" role="status">
+            {feedback}
+          </p>
+        ) : null}
 
         <section aria-labelledby="stock-quick-filters-title" className="stock-quick-section">
           <h2 className="stock-visually-hidden" id="stock-quick-filters-title">
@@ -585,11 +648,26 @@ function StockPage() {
           <div className="stock-list-section__header">
             <div>
               <h2 id="stock-list-title">Stok Listesi</h2>
-              <p aria-live="polite">{filteredProducts.length} ürün</p>
+              <p aria-live="polite">
+                {isLoading ? 'Stoklar yükleniyor…' : `${response?.totalItems ?? 0} ürün`}
+              </p>
             </div>
           </div>
 
-          {visibleProducts.length > 0 ? (
+          {loadError ? (
+            <div className="stock-no-results" role="alert">
+              <h3>Stok listesi yüklenemedi</h3>
+              <p>Bağlantıyı kontrol edip yeniden deneyin.</p>
+              <button onClick={() => setReloadKey((value) => value + 1)} type="button">
+                Yeniden Dene
+              </button>
+            </div>
+          ) : isLoading ? (
+            <div className="stock-no-results" role="status">
+              <h3>Stoklar yükleniyor</h3>
+              <p>Liste hazırlanıyor…</p>
+            </div>
+          ) : visibleProducts.length > 0 ? (
             <div className="stock-list" aria-label="Stok ürünleri">
               <StockTable
                 openMenuKey={openMenuKey}
@@ -606,15 +684,21 @@ function StockPage() {
             </div>
           ) : (
             <div className="stock-no-results" role="status">
-              <h3>Sonuç bulunamadı</h3>
-              <p>Arama veya stok filtresini değiştirerek yeniden deneyin.</p>
-              <button onClick={clearFilters} type="button">
-                Filtreleri Temizle
-              </button>
+              <h3>{hasActiveFilters ? 'Sonuç bulunamadı' : 'Stok kaydı yok'}</h3>
+              <p>
+                {hasActiveFilters
+                  ? 'Arama veya stok filtresini değiştirerek yeniden deneyin.'
+                  : 'Stok kaydı gösterebilmek için önce ürün oluşturun.'}
+              </p>
+              {hasActiveFilters ? (
+                <button onClick={clearFilters} type="button">
+                  Filtreleri Temizle
+                </button>
+              ) : null}
             </div>
           )}
 
-          {filteredProducts.length > itemsPerPage ? (
+          {!isLoading && !loadError && (response?.totalItems ?? 0) > itemsPerPage ? (
             <nav aria-label="Stok sayfaları" className="stock-pagination">
               <button
                 disabled={currentPage === 1}
@@ -654,6 +738,7 @@ function StockPage() {
       {selectedProduct ? (
         <StockUpdateDialog
           onClose={closeUpdateDialog}
+          onUpdated={handleStockUpdated}
           product={selectedProduct}
           returnFocusTo={modalReturnFocusTo}
         />

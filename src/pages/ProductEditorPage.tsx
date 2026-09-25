@@ -5,13 +5,16 @@ import {
   type FieldErrors,
   type Resolver,
 } from 'react-hook-form'
-import { Link, useLocation, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import type {
+  CreateProductInput,
+  ProductDetail,
+  ProductDetailResponse,
+  UpdateProductInput,
+} from '../contracts/products'
+import { ApiError, apiJson } from '../lib/api'
 import './ProductEditorPage.css'
-import {
-  productCategoryOptions,
-  productDemoData,
-  type ProductDemoRecord,
-} from './products/productDemoData'
+import { productCategoryOptions } from './products/productDemoData'
 import {
   createProductFormSchema,
   type ProductFormSchema,
@@ -67,7 +70,7 @@ function FieldMessage({ error, id }: FieldMessageProps) {
   )
 }
 
-function getDefaultValues(product?: ProductDemoRecord): ProductFormValues {
+function getDefaultValues(product?: ProductDetail): ProductFormValues {
   if (!product) {
     return {
       category: '',
@@ -82,7 +85,7 @@ function getDefaultValues(product?: ProductDemoRecord): ProductFormValues {
   }
 
   const category = productCategoryOptions.find(
-    (option) => option.label === product.category,
+    (option) => option.value === product.category || option.label === product.category,
   )?.value
 
   return {
@@ -90,11 +93,20 @@ function getDefaultValues(product?: ProductDemoRecord): ProductFormValues {
     description: product.description ?? '',
     lowStockThreshold: String(product.lowStockThreshold),
     name: product.name,
-    price: String(product.price),
-    publication: product.publication,
-    sku: product.sku,
-    stock: String(product.stock),
+    price: String(product.priceMinor / 100),
+    publication: product.publicationStatus === 'active' ? 'Aktif' : 'Pasif',
+    sku: product.sku ?? '',
+    stock: String(product.stockQuantity),
   }
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.addEventListener('load', () => resolve(String(reader.result)))
+    reader.addEventListener('error', () => reject(reader.error))
+    reader.readAsDataURL(file)
+  })
 }
 
 function ProductEditorForm({
@@ -104,21 +116,29 @@ function ProductEditorForm({
 }: {
   listPath: string
   mode: ProductEditorPageProps['mode']
-  product?: ProductDemoRecord
+  product?: ProductDetail
 }) {
   const isCreateMode = mode === 'create'
-  const schema = useMemo(() => createProductFormSchema(product?.id), [product?.id])
+  const navigate = useNavigate()
+  const location = useLocation()
+  const schema = useMemo(() => createProductFormSchema(), [])
   const resolver = useMemo(() => createZodResolver(schema), [schema])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const previewUrlRef = useRef<string | null>(null)
-  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(product?.imageUrl ?? null)
+  const [persistedImageUrl, setPersistedImageUrl] = useState<string | null>(product?.imageUrl ?? null)
   const [imageFileName, setImageFileName] = useState('')
+  const [imageFile, setImageFile] = useState<File | null>(null)
   const [imageDirty, setImageDirty] = useState(false)
-  const [submitValidated, setSubmitValidated] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+  const [submitSucceeded, setSubmitSucceeded] = useState(false)
   const {
     formState: { errors, isDirty, isSubmitting },
     handleSubmit,
     register,
+    reset,
+    setError,
+    setFocus,
   } = useForm<ProductFormValues>({
     defaultValues: getDefaultValues(product),
     resolver,
@@ -150,13 +170,16 @@ function ProductEditorForm({
       previewUrlRef.current = previewUrl
       setImagePreviewUrl(previewUrl)
       setImageFileName(file.name)
+      setImageFile(file)
     } else {
-      setImagePreviewUrl(null)
+      setImagePreviewUrl(product?.imageUrl ?? null)
       setImageFileName('')
+      setImageFile(null)
     }
 
     setImageDirty(true)
-    setSubmitValidated(false)
+    setSubmitError('')
+    setSubmitSucceeded(false)
   }
 
   const removeImage = () => {
@@ -168,11 +191,85 @@ function ProductEditorForm({
 
     setImagePreviewUrl(null)
     setImageFileName('')
+    setImageFile(null)
     setImageDirty(true)
-    setSubmitValidated(false)
+    setSubmitError('')
+    setSubmitSucceeded(false)
   }
 
   const hasUnsavedChanges = isDirty || imageDirty
+
+  const submit = async (values: ProductFormValues) => {
+    setSubmitError('')
+    setSubmitSucceeded(false)
+
+    let imageUrl = persistedImageUrl
+
+    if (imageDirty) {
+      try {
+        imageUrl = imageFile ? await readFileAsDataUrl(imageFile) : null
+      } catch {
+        setSubmitError('Ürün görseli okunamadı. Görseli yeniden seçip tekrar deneyin.')
+        return
+      }
+    }
+
+    const commonInput = {
+      category: values.category,
+      description: values.description || null,
+      imageUrl,
+      lowStockThreshold: Number(values.lowStockThreshold),
+      name: values.name,
+      priceMinor: Math.round(Number(values.price) * 100),
+      publicationStatus: values.publication === 'Aktif' ? 'active' as const : 'inactive' as const,
+      sku: values.sku || null,
+    }
+
+    try {
+      const response = isCreateMode
+        ? await apiJson<ProductDetailResponse>('/api/products', {
+            body: JSON.stringify({
+              ...commonInput,
+              stockQuantity: Number(values.stock),
+            } satisfies CreateProductInput),
+            method: 'POST',
+          })
+        : await apiJson<ProductDetailResponse>(`/api/products/${product?.id}`, {
+            body: JSON.stringify(commonInput satisfies UpdateProductInput),
+            method: 'PATCH',
+          })
+
+      if (isCreateMode) {
+        navigate(`/urunler/${response.item.id}${location.search}`, { replace: true })
+        return
+      }
+
+      reset(getDefaultValues(response.item))
+      setImagePreviewUrl(response.item.imageUrl)
+      setPersistedImageUrl(response.item.imageUrl)
+      setImageFile(null)
+      setImageFileName('')
+      setImageDirty(false)
+      setSubmitSucceeded(true)
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'SKU_CONFLICT') {
+        setError('sku', {
+          message: 'Bu SKU başka bir üründe kullanılıyor.',
+          type: 'server',
+        })
+        setFocus('sku')
+        return
+      }
+
+      if (error instanceof ApiError && error.code === 'PRODUCT_NOT_FOUND') {
+        setSubmitError('Ürün artık mevcut değil. Listeye dönüp yeniden deneyin.')
+      } else if (error instanceof ApiError && error.code === 'INVALID_PRODUCT_INPUT') {
+        setSubmitError('Ürün bilgileri kaydedilemedi. Alanları kontrol edip yeniden deneyin.')
+      } else {
+        setSubmitError('Ürün kaydedilemedi. Bağlantıyı kontrol edip yeniden deneyin.')
+      }
+    }
+  }
 
   return (
     <div className="product-editor-page">
@@ -192,11 +289,11 @@ function ProductEditorForm({
       <form
         className="product-editor-form"
         noValidate
-        onChange={() => setSubmitValidated(false)}
-        onSubmit={handleSubmit(
-          () => setSubmitValidated(true),
-          () => setSubmitValidated(false),
-        )}
+        onChange={() => {
+          setSubmitError('')
+          setSubmitSucceeded(false)
+        }}
+        onSubmit={handleSubmit(submit)}
       >
         <div className="product-editor-form__main-column">
           <section className="product-editor-section" aria-labelledby="basic-info-title">
@@ -283,6 +380,7 @@ function ProductEditorForm({
                   id="product-stock"
                   inputMode="numeric"
                   min="0"
+                  readOnly={!isCreateMode}
                   required
                   step="1"
                   type="number"
@@ -313,8 +411,15 @@ function ProductEditorForm({
               </div>
             </div>
             <p className="product-editor-section__note">
-              Sonraki stok değişiklikleri Stok modülünden yönetilir.
+              {isCreateMode
+                ? 'Başlangıç stoğunu burada girin. Sonraki stok değişiklikleri Stok modülünden yönetilir.'
+                : 'Mevcut stok salt okunurdur. Operasyonel stok değişiklikleri Stok modülünden yapılır.'}
             </p>
+            {!isCreateMode && product ? (
+              <Link className="product-editor-section__stock-link" to={`/stok?q=${encodeURIComponent(product.sku ?? product.name)}`}>
+                Stok modülünde aç
+              </Link>
+            ) : null}
           </section>
         </div>
 
@@ -334,16 +439,18 @@ function ProductEditorForm({
 
             {imagePreviewUrl ? (
               <div className="product-editor-image-preview">
-                <img alt={`${imageFileName} yerel önizlemesi`} src={imagePreviewUrl} />
-                <p>{imageFileName}</p>
+                <img
+                  alt={imageFileName ? `${imageFileName} yerel önizlemesi` : `${product?.name ?? 'Ürün'} görseli`}
+                  src={imagePreviewUrl}
+                />
+                {imageFileName ? <p>{imageFileName}</p> : null}
                 <button onClick={removeImage} type="button">
                   Görseli kaldır
                 </button>
               </div>
             ) : (
               <p className="product-editor-section__note">
-                Tek bir JPEG, PNG veya WebP görseli seçebilirsiniz. Görsel yalnız bu ekranda
-                önizlenir.
+                Tek bir JPEG, PNG veya WebP görseli seçebilir ve ürünle birlikte kaydedebilirsiniz.
               </p>
             )}
           </section>
@@ -376,19 +483,24 @@ function ProductEditorForm({
               disabled={isSubmitting}
               type="submit"
             >
-              Kaydet
+              {isSubmitting ? 'Kaydediliyor…' : 'Kaydet'}
             </button>
             <p className="product-editor-section__note">
-              Bu demo form doğrulama yapar; bilgiler kalıcı olarak kaydedilmez.
+              Ürün bilgileri ve yayın durumu kataloğa kaydedilir.
             </p>
             {hasUnsavedChanges ? (
               <p className="product-editor-form__dirty-note">
                 Kaydedilmemiş değişiklikleriniz var.
               </p>
             ) : null}
-            {submitValidated ? (
+            {submitSucceeded ? (
               <p className="product-editor-form__success" role="status">
-                Form doğrulandı. Bu demo ekranda kalıcı kayıt oluşturulmadı.
+                Ürün bilgileri kaydedildi.
+              </p>
+            ) : null}
+            {submitError ? (
+              <p className="product-editor-field__error" role="alert">
+                {submitError}
               </p>
             ) : null}
           </section>
@@ -401,10 +513,76 @@ function ProductEditorForm({
 function ProductEditorPage({ mode }: ProductEditorPageProps) {
   const { id } = useParams()
   const location = useLocation()
-  const product = mode === 'edit' ? productDemoData.find((item) => item.id === id) : undefined
+  const [loadState, setLoadState] = useState<{
+    error: boolean
+    notFound: boolean
+    product: ProductDetail | undefined
+    requestKey: string
+  }>({ error: false, notFound: false, product: undefined, requestKey: '' })
+  const [reloadKey, setReloadKey] = useState(0)
   const listPath = `/urunler${location.search}`
+  const hasValidId = Boolean(id && /^\d+$/.test(id) && Number(id) > 0)
+  const requestKey = mode === 'edit' && hasValidId ? `${id}|${reloadKey}` : ''
+  const isLoading = mode === 'edit' && hasValidId && loadState.requestKey !== requestKey
+  const product = isLoading ? undefined : loadState.product
+  const loadError = !isLoading && loadState.requestKey === requestKey && loadState.error
+  const notFound = mode === 'edit' && (!hasValidId || (
+    loadState.requestKey === requestKey && loadState.notFound
+  ))
 
-  if (mode === 'edit' && !product) {
+  useEffect(() => {
+    if (mode !== 'edit' || !hasValidId) {
+      return
+    }
+
+    const controller = new AbortController()
+
+    void apiJson<ProductDetailResponse>(`/api/products/${id}`, { signal: controller.signal })
+      .then((response) => setLoadState({
+        error: false,
+        notFound: false,
+        product: response.item,
+        requestKey,
+      }))
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return
+        }
+
+        setLoadState({
+          error: !(error instanceof ApiError && error.code === 'PRODUCT_NOT_FOUND'),
+          notFound: error instanceof ApiError && error.code === 'PRODUCT_NOT_FOUND',
+          product: undefined,
+          requestKey,
+        })
+      })
+
+    return () => controller.abort()
+  }, [hasValidId, id, mode, requestKey])
+
+  if (mode === 'edit' && isLoading) {
+    return (
+      <section className="product-editor-not-found" aria-labelledby="page-title" role="status">
+        <h1 id="page-title">Ürün yükleniyor</h1>
+        <p>Ürün bilgileri hazırlanıyor…</p>
+      </section>
+    )
+  }
+
+  if (mode === 'edit' && loadError) {
+    return (
+      <section className="product-editor-not-found" aria-labelledby="page-title" role="alert">
+        <h1 id="page-title">Ürün yüklenemedi</h1>
+        <p>Bağlantıyı kontrol edip yeniden deneyin.</p>
+        <button onClick={() => setReloadKey((value) => value + 1)} type="button">
+          Yeniden Dene
+        </button>
+        <Link to={listPath}>Ürünlere dön</Link>
+      </section>
+    )
+  }
+
+  if (mode === 'edit' && (notFound || !product)) {
     return (
       <section className="product-editor-not-found" aria-labelledby="page-title">
         <h1 id="page-title">Ürün bulunamadı</h1>

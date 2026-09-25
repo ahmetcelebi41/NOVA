@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import type {
+  ProductListItem,
+  ProductStatusFilter,
+  ProductsResponse,
+} from '../contracts/products'
+import { apiJson } from '../lib/api'
 import './ProductsPage.css'
-import {
-  productCategoryOptions,
-  productDemoData,
-  type ProductDemoRecord,
-} from './products/productDemoData'
+import { productCategoryOptions } from './products/productDemoData'
 
 type FilterControlsProps = {
   category: string
@@ -36,8 +38,17 @@ const categoryLabels = new Map<string, string>(
 )
 const currencyFormatter = new Intl.NumberFormat('tr-TR')
 
-function formatCurrency(value: number) {
-  return `${currencyFormatter.format(value)} TL`
+const publicationLabels = { active: 'Aktif', inactive: 'Pasif' } as const
+const stockStatusLabels = { low: 'Düşük Stok', normal: 'Normal', out: 'Tükendi' } as const
+const apiStatusByFilter: Record<string, ProductStatusFilter> = {
+  aktif: 'active',
+  dusuk: 'low',
+  pasif: 'inactive',
+  tukendi: 'out',
+}
+
+function formatCurrency(valueMinor: number) {
+  return `${currencyFormatter.format(valueMinor / 100)} TL`
 }
 
 function parsePrice(value: string | null) {
@@ -70,8 +81,50 @@ function normalizePriceRange(minimumValue: string | null, maximumValue: string |
   }
 }
 
-function createProductEditPath(productId: string, preservedQuery: string) {
+function createProductEditPath(productId: number, preservedQuery: string) {
   return `/urunler/${productId}${preservedQuery ? `?${preservedQuery}` : ''}`
+}
+
+function getCategoryLabel(category: string) {
+  return categoryLabels.get(category) ?? category
+}
+
+function createProductsApiQuery({
+  category,
+  maximumPrice,
+  minimumPrice,
+  page,
+  query,
+  quickFilter,
+}: {
+  category: string
+  maximumPrice: string
+  minimumPrice: string
+  page: number
+  query: string
+  quickFilter: string
+}) {
+  const apiSearchParams = new URLSearchParams({ page: String(page) })
+  const parsedMinimumPrice = parsePrice(minimumPrice)
+  const parsedMaximumPrice = parsePrice(maximumPrice)
+
+  if (quickFilter) {
+    apiSearchParams.set('status', apiStatusByFilter[quickFilter])
+  }
+  if (category) {
+    apiSearchParams.set('category', category)
+  }
+  if (query.trim()) {
+    apiSearchParams.set('q', query.trim())
+  }
+  if (parsedMinimumPrice !== null) {
+    apiSearchParams.set('priceMinMinor', String(Math.round(parsedMinimumPrice * 100)))
+  }
+  if (parsedMaximumPrice !== null) {
+    apiSearchParams.set('priceMaxMinor', String(Math.round(parsedMaximumPrice * 100)))
+  }
+
+  return apiSearchParams.toString()
 }
 
 function FilterControls({
@@ -158,29 +211,31 @@ function ProductCards({
   products,
 }: {
   preservedQuery: string
-  products: ProductDemoRecord[]
+  products: ProductListItem[]
 }) {
   return (
     <ul className="products-cards">
       {products.map((product) => (
         <li key={product.id}>
           <Link
-            aria-label={`${product.name}, ${product.category}, ${formatCurrency(product.price)}, ${product.stock} stok, ${product.publication}. Düzenle`}
+            aria-label={`${product.name}, ${getCategoryLabel(product.category)}, ${formatCurrency(product.priceMinor)}, ${product.stockQuantity} stok, ${publicationLabels[product.publicationStatus]}. Düzenle`}
             className="products-list__row"
             to={createProductEditPath(product.id, preservedQuery)}
           >
             <span data-label="Ürün">
               <strong>{product.name}</strong>
             </span>
-            <span data-label="Kategori">{product.category}</span>
+            <span data-label="Kategori">{getCategoryLabel(product.category)}</span>
             <span className="products-list__number" data-label="Fiyat">
-              {formatCurrency(product.price)}
+              {formatCurrency(product.priceMinor)}
             </span>
             <span className="products-list__number" data-label="Stok">
-              {product.stock} · {product.stockStatus}
+              {product.stockQuantity} · {stockStatusLabels[product.stockStatus]}
             </span>
             <span data-label="Yayın">
-              <span className="products-status-text">{product.publication}</span>
+              <span className="products-status-text">
+                {publicationLabels[product.publicationStatus]}
+              </span>
             </span>
             <span className="products-list__action" data-label="Aksiyon">
               Düzenle
@@ -197,7 +252,7 @@ function ProductsTable({
   products,
 }: {
   preservedQuery: string
-  products: ProductDemoRecord[]
+  products: ProductListItem[]
 }) {
   return (
     <table className="products-table">
@@ -226,13 +281,15 @@ function ProductsTable({
                 <strong>{product.name}</strong>
               </Link>
             </td>
-            <td>{product.category}</td>
-            <td className="products-table__number">{formatCurrency(product.price)}</td>
+            <td>{getCategoryLabel(product.category)}</td>
+            <td className="products-table__number">{formatCurrency(product.priceMinor)}</td>
             <td className="products-table__number">
-              {product.stock} · {product.stockStatus}
+              {product.stockQuantity} · {stockStatusLabels[product.stockStatus]}
             </td>
             <td>
-              <span className="products-status-text">{product.publication}</span>
+              <span className="products-status-text">
+                {publicationLabels[product.publicationStatus]}
+              </span>
             </td>
             <td>
               <Link
@@ -252,6 +309,12 @@ function ProductsTable({
 
 function ProductsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const [loadState, setLoadState] = useState<{
+    error: boolean
+    requestKey: string
+    response: ProductsResponse | null
+  }>({ error: false, requestKey: '', response: null })
+  const [reloadKey, setReloadKey] = useState(0)
   const mobileFiltersRef = useRef<HTMLDetailsElement>(null)
   const mobileFiltersSummaryRef = useRef<HTMLElement>(null)
   const requestedQuickFilter = searchParams.get('durum') ?? ''
@@ -283,63 +346,53 @@ function ProductsPage() {
     setSearchParams(nextParams, options)
   }
 
-  const filteredProducts = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase('tr-TR')
-    const parsedMinimumPrice = parsePrice(minimumPrice)
-    const parsedMaximumPrice = parsePrice(maximumPrice)
-    const selectedCategoryLabel = categoryLabels.get(selectedCategory)
-
-    return productDemoData
-      .filter((product) => {
-        if (selectedQuickFilter === 'aktif' && product.publication !== 'Aktif') {
-          return false
-        }
-        if (selectedQuickFilter === 'pasif' && product.publication !== 'Pasif') {
-          return false
-        }
-        if (selectedQuickFilter === 'dusuk' && product.stockStatus !== 'Düşük Stok') {
-          return false
-        }
-        if (selectedQuickFilter === 'tukendi' && product.stockStatus !== 'Tükendi') {
-          return false
-        }
-        if (selectedCategoryLabel && product.category !== selectedCategoryLabel) {
-          return false
-        }
-        if (parsedMinimumPrice !== null && product.price < parsedMinimumPrice) {
-          return false
-        }
-        if (parsedMaximumPrice !== null && product.price > parsedMaximumPrice) {
-          return false
-        }
-        if (!normalizedQuery) {
-          return true
-        }
-
-        return [product.name, product.sku].some((value) =>
-          value.toLocaleLowerCase('tr-TR').includes(normalizedQuery),
-        )
-      })
-      .toSorted((first, second) => Date.parse(second.createdAt) - Date.parse(first.createdAt))
-  }, [maximumPrice, minimumPrice, query, selectedCategory, selectedQuickFilter])
-
   const requestedPage = Number.parseInt(searchParams.get('sayfa') ?? '1', 10)
-  const pageCount = Math.max(1, Math.ceil(filteredProducts.length / itemsPerPage))
-  const currentPage = Number.isFinite(requestedPage)
-    ? Math.min(Math.max(requestedPage, 1), pageCount)
-    : 1
-  const visibleProducts = filteredProducts.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage,
-  )
+  const currentPage = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1
+  const apiQuery = createProductsApiQuery({
+    category: selectedCategory,
+    maximumPrice,
+    minimumPrice,
+    page: currentPage,
+    query,
+    quickFilter: selectedQuickFilter,
+  })
+  const requestKey = `${apiQuery}|${reloadKey}`
+  const isLoading = loadState.requestKey !== requestKey
+  const loadError = !isLoading && loadState.error
+  const response = isLoading ? null : loadState.response
+  const pageCount = Math.max(1, response?.totalPages ?? 1)
+  const visibleProducts = response?.items ?? []
   const hasActiveFilters = Boolean(
     selectedQuickFilter || selectedCategory || query || minimumPrice || maximumPrice,
   )
   const preservedQuery = searchParams.toString()
 
   useEffect(() => {
+    const controller = new AbortController()
+
+    void apiJson<ProductsResponse>(`/api/products?${apiQuery}`, {
+      signal: controller.signal,
+    })
+      .then((nextResponse) => setLoadState({
+        error: false,
+        requestKey,
+        response: nextResponse,
+      }))
+      .catch((error: unknown) => {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          setLoadState({ error: true, requestKey, response: null })
+        }
+      })
+
+    return () => controller.abort()
+  }, [apiQuery, requestKey])
+
+  useEffect(() => {
     const nextParams = new URLSearchParams(searchParams)
-    const normalizedPageParam = currentPage === 1 ? null : String(currentPage)
+    const normalizedCurrentPage = response?.totalPages && currentPage > response.totalPages
+      ? response.totalPages
+      : currentPage
+    const normalizedPageParam = normalizedCurrentPage === 1 ? null : String(normalizedCurrentPage)
     const normalizedValues: Record<string, string | null> = {
       durum: selectedQuickFilter || null,
       kategori: selectedCategory || null,
@@ -363,6 +416,7 @@ function ProductsPage() {
     currentPage,
     maximumPrice,
     minimumPrice,
+    response?.totalPages,
     searchParams,
     selectedCategory,
     selectedQuickFilter,
@@ -484,26 +538,47 @@ function ProductsPage() {
         <div className="products-list-section__header">
           <div>
             <h2 id="products-list-title">Ürün Listesi</h2>
-            <p aria-live="polite">{filteredProducts.length} ürün</p>
+            <p aria-live="polite">
+              {isLoading ? 'Ürünler yükleniyor…' : `${response?.totalItems ?? 0} ürün`}
+            </p>
           </div>
         </div>
 
-        {visibleProducts.length > 0 ? (
+        {loadError ? (
+          <div className="products-no-results" role="alert">
+            <h3>Ürünler yüklenemedi</h3>
+            <p>Bağlantıyı kontrol edip yeniden deneyin.</p>
+            <button onClick={() => setReloadKey((value) => value + 1)} type="button">
+              Yeniden Dene
+            </button>
+          </div>
+        ) : isLoading ? (
+          <div className="products-no-results" role="status">
+            <h3>Ürünler yükleniyor</h3>
+            <p>Liste hazırlanıyor…</p>
+          </div>
+        ) : visibleProducts.length > 0 ? (
           <div className="products-list" aria-label="Ürünler">
             <ProductsTable products={visibleProducts} preservedQuery={preservedQuery} />
             <ProductCards products={visibleProducts} preservedQuery={preservedQuery} />
           </div>
         ) : (
           <div className="products-no-results" role="status">
-            <h3>Sonuç bulunamadı</h3>
-            <p>Arama veya filtreleri değiştirerek yeniden deneyin.</p>
-            <button onClick={() => setSearchParams({})} type="button">
-              Filtreleri Temizle
-            </button>
+            <h3>{hasActiveFilters ? 'Sonuç bulunamadı' : 'Henüz ürün yok'}</h3>
+            <p>
+              {hasActiveFilters
+                ? 'Arama veya filtreleri değiştirerek yeniden deneyin.'
+                : 'İlk ürününüzü oluşturarak kataloğu hazırlamaya başlayın.'}
+            </p>
+            {hasActiveFilters ? (
+              <button onClick={() => setSearchParams({})} type="button">
+                Filtreleri Temizle
+              </button>
+            ) : null}
           </div>
         )}
 
-        {filteredProducts.length > itemsPerPage ? (
+        {!isLoading && !loadError && (response?.totalItems ?? 0) > itemsPerPage ? (
           <nav aria-label="Ürün sayfaları" className="products-pagination">
             <button
               disabled={currentPage === 1}

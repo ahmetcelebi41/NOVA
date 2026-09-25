@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { productCategoryOptions, productDemoData } from './productDemoData'
+import { productCategoryOptions } from './productDemoData'
 
 const categoryValues = new Set<string>(
   productCategoryOptions.map((category) => category.value),
@@ -49,26 +49,8 @@ const productFormBaseSchema = z.object({
 
 export type ProductFormValues = z.infer<typeof productFormBaseSchema>
 
-export function createProductFormSchema(currentProductId?: string) {
-  return productFormBaseSchema.superRefine((values, context) => {
-    if (!values.sku) {
-      return
-    }
-
-    const duplicateProduct = productDemoData.find(
-      (product) =>
-        product.id !== currentProductId &&
-        product.sku === values.sku,
-    )
-
-    if (duplicateProduct) {
-      context.addIssue({
-        code: 'custom',
-        message: 'Bu SKU başka bir üründe kullanılıyor.',
-        path: ['sku'],
-      })
-    }
-  })
+export function createProductFormSchema() {
+  return productFormBaseSchema
 }
 
 export type ProductFormSchema = ReturnType<typeof createProductFormSchema>
