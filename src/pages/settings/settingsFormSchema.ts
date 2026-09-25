@@ -9,6 +9,7 @@ function nonNegativeNumberString(fieldName: string) {
       const parsedValue = Number(value)
       return Number.isFinite(parsedValue) && parsedValue >= 0
     }, `${fieldName} 0 veya daha büyük olmalıdır.`)
+    .refine((value) => /^\d+(?:\.\d{1,2})?$/.test(value), `${fieldName} en fazla iki ondalık basamak içerebilir.`)
 }
 
 export const settingsFormSchema = z

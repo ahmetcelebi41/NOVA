@@ -51,3 +51,19 @@ export type {
   UpdateStockInput,
 } from './stock.js'
 export type { SettingsResponse, UpdateSettingsInput } from './settings.js'
+export type {
+  OverviewCriticalStock,
+  OverviewOrderStatusCount,
+  OverviewRecentOrder,
+  OverviewResponse,
+  OverviewSalesPeriod,
+  OverviewSalesPoint,
+} from './overview.js'
+export type {
+  AnalyticsApiPeriod,
+  AnalyticsCategoryPerformance,
+  AnalyticsMetricSummary,
+  AnalyticsProductPerformance,
+  AnalyticsResponse,
+  AnalyticsTrendPoint,
+} from './analytics.js'

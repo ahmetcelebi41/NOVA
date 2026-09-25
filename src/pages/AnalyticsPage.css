@@ -37,6 +37,34 @@
   margin-top: var(--space-8);
 }
 
+.analytics-empty,
+.analytics-panel__empty {
+  margin: 0;
+  font-size: var(--text-14);
+  opacity: 0.68;
+}
+
+.analytics-panel__empty {
+  margin-top: var(--space-24);
+}
+
+.analytics-state {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-12);
+}
+
+.analytics-state button {
+  min-height: var(--space-40);
+  padding-inline: var(--space-16);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-8);
+  background: var(--color-primary);
+  color: var(--color-surface);
+  cursor: pointer;
+  font-weight: var(--font-weight-semibold);
+}
+
 .analytics-period-control,
 .analytics-custom-range label {
   display: grid;

@@ -80,6 +80,29 @@
   opacity: 0.68;
 }
 
+.overview-empty {
+  margin: var(--space-24) 0 0;
+  font-size: var(--text-14);
+  opacity: 0.68;
+}
+
+.overview-state {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-12);
+}
+
+.overview-state button {
+  min-height: var(--space-40);
+  padding-inline: var(--space-16);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-8);
+  background: var(--color-primary);
+  color: var(--color-surface);
+  cursor: pointer;
+  font-weight: var(--font-weight-semibold);
+}
+
 .overview-section {
   min-width: 0;
   padding: var(--space-16);

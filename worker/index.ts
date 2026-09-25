@@ -1,4 +1,5 @@
 import type { HealthResponse } from '../src/contracts/index.js'
+import { getAnalytics, parseAnalyticsQuery } from './analytics.js'
 import {
   getCustomer,
   listCustomers,
@@ -29,6 +30,7 @@ import {
   updateProduct,
 } from './products.js'
 import { getSettings, parseUpdateSettingsInput, putSettings } from './settings.js'
+import { getOverview } from './overview.js'
 import {
   listStock,
   listStockMovements,
@@ -141,6 +143,30 @@ export default {
                 message: 'İşletme ayarları yapılandırılmadı.',
               },
             }, 404)
+      } catch {
+        return internalErrorResponse()
+      }
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/overview') {
+      try {
+        return jsonResponse(await getOverview(env.DB))
+      } catch {
+        return internalErrorResponse()
+      }
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/analytics') {
+      const parsedQuery = parseAnalyticsQuery(url.searchParams)
+
+      if (!parsedQuery.ok) {
+        return jsonResponse({
+          error: { code: 'INVALID_ANALYTICS_QUERY', message: 'Geçersiz analiz tarih aralığı.' },
+        }, 400)
+      }
+
+      try {
+        return jsonResponse(await getAnalytics(env.DB, parsedQuery.query))
       } catch {
         return internalErrorResponse()
       }

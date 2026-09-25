@@ -196,12 +196,35 @@
 }
 
 .settings-section p.settings-actions__note,
-.settings-section p.settings-actions__success {
+.settings-section p.settings-actions__success,
+.settings-section p.settings-actions__error {
   margin-top: var(--space-12);
   font-size: var(--text-13);
 }
 
 .settings-actions__success {
+  font-weight: var(--font-weight-semibold);
+}
+
+.settings-actions__error {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.settings-state {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-12);
+}
+
+.settings-state button {
+  min-height: var(--space-40);
+  padding-inline: var(--space-16);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-8);
+  background: var(--color-primary);
+  color: var(--color-surface);
+  cursor: pointer;
   font-weight: var(--font-weight-semibold);
 }
 
