@@ -14,6 +14,7 @@ export type {
   OrderStatusFilter,
   OrderStatusHistoryItem,
   OrderTotals,
+  UpdateOrderStatusInput,
 } from './orders.js'
 export type {
   CustomerDetail,

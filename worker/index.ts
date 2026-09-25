@@ -10,9 +10,12 @@ import {
   getOrder,
   listOrders,
   OrderCreateError,
+  OrderStatusError,
   parseCreateOrderInput,
   parseOrderId,
   parseOrdersQuery,
+  parseUpdateOrderStatusInput,
+  updateOrderStatus,
 } from './orders.js'
 import {
   createProduct,
@@ -215,6 +218,56 @@ export default {
       } catch (error) {
         return error instanceof OrderCreateError
           ? jsonResponse({ error: { code: error.code, message: 'Sipariş oluşturulamadı.' } }, 409)
+          : internalErrorResponse()
+      }
+    }
+
+    if (request.method === 'PATCH' && url.pathname.startsWith('/api/orders/')) {
+      const parts = url.pathname.slice('/api/orders/'.length).split('/')
+
+      if (parts.length !== 2 || parts[1] !== 'status') {
+        return jsonResponse({ ok: false, error: 'Not Found' }, 404)
+      }
+
+      const orderId = parseOrderId(parts[0] ?? '')
+
+      if (orderId === null) {
+        return jsonResponse({
+          error: { code: 'INVALID_ORDER_ID', message: 'Geçersiz sipariş kimliği.' },
+        }, 400)
+      }
+
+      let body: unknown
+
+      try {
+        body = await readJsonBody(request)
+      } catch {
+        return jsonResponse({
+          error: { code: 'INVALID_ORDER_STATUS_INPUT', message: 'Geçersiz sipariş durumu.' },
+        }, 400)
+      }
+
+      const input = parseUpdateOrderStatusInput(body)
+
+      if (!input) {
+        return jsonResponse({
+          error: { code: 'INVALID_ORDER_STATUS_INPUT', message: 'Geçersiz sipariş durumu.' },
+        }, 400)
+      }
+
+      try {
+        const detail = await updateOrderStatus(env.DB, orderId, input)
+
+        return detail
+          ? jsonResponse(detail)
+          : jsonResponse({
+              error: { code: 'ORDER_NOT_FOUND', message: 'Sipariş bulunamadı.' },
+            }, 404)
+      } catch (error) {
+        return error instanceof OrderStatusError
+          ? jsonResponse({
+              error: { code: error.code, message: 'Sipariş durumu güncellenemedi.' },
+            }, 409)
           : internalErrorResponse()
       }
     }

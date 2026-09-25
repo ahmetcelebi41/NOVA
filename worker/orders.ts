@@ -13,6 +13,7 @@ import type {
   OrderStatusFilter,
   OrderStatusHistoryItem,
   OrderTotals,
+  UpdateOrderStatusInput,
 } from '../src/contracts/index.js'
 
 type OrderListRow = {
@@ -84,6 +85,20 @@ type OrderSettingsRow = {
   pickup_enabled: number
 }
 type CreatedOrderIdRow = { id: number }
+type OrderTransitionRow = { status: string; updated_at: string }
+type RestorableLineRow = { product_id: number | null; quantity: number }
+type RestorableProductRow = { id: number; stock_quantity: number }
+
+export type OrderStatusErrorCode = 'INVALID_ORDER_TRANSITION' | 'STOCK_CONFLICT'
+
+export class OrderStatusError extends Error {
+  readonly code: OrderStatusErrorCode
+
+  constructor(code: OrderStatusErrorCode) {
+    super(code)
+    this.code = code
+  }
+}
 
 export type OrderCreateErrorCode =
   | 'CUSTOMER_MATCH_CONFLICT'
@@ -864,6 +879,149 @@ export async function createOrder(
 
   if (!orderId || !Number.isSafeInteger(orderId)) {
     throw new Error('Committed order ID missing')
+  }
+
+  const detail = await getOrder(database, orderId)
+
+  if (!detail) {
+    throw new Error('Committed order missing')
+  }
+
+  return detail
+}
+
+export function parseUpdateOrderStatusInput(value: unknown): UpdateOrderStatusInput | null {
+  if (
+    !isRecord(value)
+    || !hasOnlyKeys(value, ['status'])
+    || typeof value.status !== 'string'
+    || !isOrderStatus(value.status)
+  ) {
+    return null
+  }
+
+  return { status: value.status }
+}
+
+function nextOrderStatus(status: OrderStatus): OrderStatus | null {
+  switch (status) {
+    case 'new': return 'preparing'
+    case 'preparing': return 'ready_for_delivery'
+    case 'ready_for_delivery': return 'completed'
+    case 'completed':
+    case 'cancelled': return null
+  }
+}
+
+async function cancellationRestores(
+  database: D1Database,
+  orderId: number,
+): Promise<{ productId: number; quantity: number; stock: number }[]> {
+  const lines = (await database.prepare(`
+    SELECT product_id, SUM(quantity) AS quantity
+    FROM order_items WHERE order_id = ? GROUP BY product_id
+  `).bind(orderId).all<RestorableLineRow>()).results
+
+  if (lines.length === 0 || lines.some((line) =>
+    line.product_id === null
+    || !Number.isSafeInteger(line.quantity)
+    || line.quantity <= 0
+  )) {
+    throw new OrderStatusError('STOCK_CONFLICT')
+  }
+
+  const ids = lines.map((line) => line.product_id as number)
+  const placeholders = ids.map(() => '?').join(', ')
+  const rows = (await database.prepare(`
+    SELECT id, stock_quantity FROM products WHERE id IN (${placeholders})
+  `).bind(...ids).all<RestorableProductRow>()).results
+  const products = new Map(rows.map((row) => [row.id, row]))
+
+  return lines.map((line) => {
+    const product = products.get(line.product_id!)
+
+    if (
+      !product
+      || !Number.isSafeInteger(product.stock_quantity)
+      || product.stock_quantity < 0
+      || product.stock_quantity + line.quantity > Number.MAX_SAFE_INTEGER
+    ) {
+      throw new OrderStatusError('STOCK_CONFLICT')
+    }
+
+    return {
+      productId: line.product_id!,
+      quantity: line.quantity,
+      stock: product.stock_quantity,
+    }
+  })
+}
+
+export async function updateOrderStatus(
+  database: D1Database,
+  orderId: number,
+  input: UpdateOrderStatusInput,
+): Promise<OrderDetailResponse | null> {
+  const row = await database.prepare(`
+    SELECT status, updated_at FROM orders WHERE id = ?
+  `).bind(orderId).first<OrderTransitionRow>()
+
+  if (!row) {
+    return null
+  }
+
+  const current = mapOrderStatus(row.status)
+
+  if (current === input.status) {
+    return getOrder(database, orderId)
+  }
+
+  if (
+    current === 'completed'
+    || current === 'cancelled'
+    || (input.status !== 'cancelled' && nextOrderStatus(current) !== input.status)
+  ) {
+    throw new OrderStatusError('INVALID_ORDER_TRANSITION')
+  }
+
+  const cancelling = input.status === 'cancelled'
+  const restores = cancelling ? await cancellationRestores(database, orderId) : []
+  const previousTime = Date.parse(row.updated_at)
+  const now = new Date(Math.max(Date.now(), previousTime + 1)).toISOString()
+  const statements: D1PreparedStatement[] = [
+    database.prepare(`
+      UPDATE orders SET status = ?, updated_at = ?
+      WHERE id = ? AND status = ? AND updated_at = ?
+    `).bind(input.status, now, orderId, current, row.updated_at),
+    database.prepare(`
+      INSERT INTO order_status_history (order_id, status)
+      VALUES (CASE WHEN changes() = 1 THEN ? ELSE NULL END, ?)
+    `).bind(orderId, input.status),
+  ]
+
+  for (const restore of restores) {
+    statements.push(database.prepare(`
+      UPDATE products SET stock_quantity = stock_quantity + ?, updated_at = ?
+      WHERE id = ? AND stock_quantity = ? AND stock_quantity <= ?
+    `).bind(restore.quantity, now, restore.productId, restore.stock,
+      Number.MAX_SAFE_INTEGER - restore.quantity))
+    statements.push(database.prepare(`
+      INSERT INTO inventory_movements (
+        product_id, order_id, movement_type, quantity_delta, resulting_stock
+      ) VALUES (
+        CASE WHEN changes() = 1 THEN ? ELSE NULL END,
+        ?, 'order_cancelled', ?,
+        (SELECT stock_quantity FROM products WHERE id = ?)
+      )
+    `).bind(restore.productId, orderId, restore.quantity, restore.productId))
+  }
+
+  try {
+    await database.batch(statements)
+  } catch {
+    // A zero-row order/stock guard makes the following NOT NULL insert fail.
+    // D1 then rolls back the entire status/history/restore batch.
+    throw new OrderStatusError(cancelling ? 'STOCK_CONFLICT' : 'INVALID_ORDER_TRANSITION')
   }
 
   const detail = await getOrder(database, orderId)

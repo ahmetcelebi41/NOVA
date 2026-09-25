@@ -32,6 +32,10 @@ export type CreateOrderInput = {
   notes?: string | null
 }
 
+export type UpdateOrderStatusInput = {
+  status: OrderStatus
+}
+
 export type OrderListItem = {
   id: number
   orderNumber: string
