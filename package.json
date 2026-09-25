@@ -9,9 +9,11 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "deploy": "vite build && wrangler deploy"
+    "deploy": "pnpm run deploy:production",
+    "deploy:production": "vite build --mode production && wrangler deploy"
   },
   "dependencies": {
+    "jose": "^6.2.12",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-hook-form": "^7.88.0",

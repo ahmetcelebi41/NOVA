@@ -1,4 +1,5 @@
 import type { HealthResponse } from '../src/contracts/index.js'
+import { verifyCloudflareAccess, type CloudflareAccessEnv } from './access.js'
 import { getAnalytics, parseAnalyticsQuery } from './analytics.js'
 import {
   getCustomer,
@@ -40,8 +41,9 @@ import {
   updateStock,
 } from './stock.js'
 
-type Env = {
+type Env = CloudflareAccessEnv & {
   DB: D1Database
+  ENVIRONMENT: 'development' | 'production'
 }
 
 const jsonHeaders = { 'Content-Type': 'application/json' }
@@ -120,6 +122,12 @@ async function readJsonBody(request: Request): Promise<unknown> {
 
 export default {
   async fetch(request, env): Promise<Response> {
+    if (env.ENVIRONMENT === 'production') {
+      const accessFailure = await verifyCloudflareAccess(request, env)
+
+      if (accessFailure) return accessFailure
+    }
+
     const url = new URL(request.url)
 
     if (request.method === 'GET' && url.pathname === '/api/health') {
