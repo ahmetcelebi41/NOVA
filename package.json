@@ -13,7 +13,6 @@
     "deploy:production": "vite build --mode production && wrangler deploy"
   },
   "dependencies": {
-    "jose": "^6.2.12",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-hook-form": "^7.88.0",

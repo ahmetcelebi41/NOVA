@@ -1,6 +1,6 @@
 import type { HealthResponse } from '../src/contracts/index.js'
-import { verifyCloudflareAccess, type CloudflareAccessEnv } from './access.js'
 import { getAnalytics, parseAnalyticsQuery } from './analytics.js'
+import { verifyBasicAuth, type BasicAuthEnv } from './basic-auth.js'
 import {
   getCustomer,
   listCustomers,
@@ -41,9 +41,10 @@ import {
   updateStock,
 } from './stock.js'
 
-type Env = CloudflareAccessEnv & {
+type Env = BasicAuthEnv & {
+  APP_ENV: 'development' | 'production'
+  ASSETS: Fetcher
   DB: D1Database
-  ENVIRONMENT: 'development' | 'production'
 }
 
 const jsonHeaders = { 'Content-Type': 'application/json' }
@@ -122,10 +123,10 @@ async function readJsonBody(request: Request): Promise<unknown> {
 
 export default {
   async fetch(request, env): Promise<Response> {
-    if (env.ENVIRONMENT === 'production') {
-      const accessFailure = await verifyCloudflareAccess(request, env)
+    if (env.APP_ENV === 'production') {
+      const authFailure = await verifyBasicAuth(request, env)
 
-      if (accessFailure) return accessFailure
+      if (authFailure) return authFailure
     }
 
     const url = new URL(request.url)
@@ -664,6 +665,6 @@ export default {
       )
     }
 
-    return new Response('Not Found', { status: 404 })
+    return env.ASSETS.fetch(request)
   },
 } satisfies ExportedHandler<Env>
